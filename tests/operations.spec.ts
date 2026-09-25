@@ -6,7 +6,7 @@ test("admin prepares a draft and owner approves the current version", async ({
   browser,
 }) => {
   const customer = await browser.newContext({
-    baseURL: "http://127.0.0.1:3001",
+    baseURL: test.info().project.use.baseURL as string,
   });
   const signup = await customer.request.post("/api/auth", {
     data: {

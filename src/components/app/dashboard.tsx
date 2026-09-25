@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -68,6 +68,24 @@ const statusLabel: Record<string, string> = {
   completed: "Selesai",
 };
 
+type AdminAssistanceRequest = {
+  invitationId: string;
+  documentVersion: number;
+  updatedAt: string;
+};
+
+async function loadAdminAssistanceRequests(): Promise<
+  AdminAssistanceRequest[]
+> {
+  const response = await fetch("/api/admin/assistance", { cache: "no-store" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok)
+    throw new Error(data.error || "Antrean bantuan belum dapat dimuat.");
+  if (!Array.isArray(data.requests))
+    throw new Error("Respon antrean bantuan tidak valid.");
+  return data.requests;
+}
+
 export function Dashboard({ admin = false }: { admin?: boolean }) {
   const router = useRouter(),
     params = useSearchParams();
@@ -79,7 +97,13 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
     [toast, setToast] = useState<{ text: string; error?: boolean } | null>(
       null,
     ),
-    [dirty, setDirty] = useState(false);
+    [dirty, setDirty] = useState(false),
+    [assistanceRequests, setAssistanceRequests] = useState<
+      AdminAssistanceRequest[]
+    >([]),
+    [queueLoading, setQueueLoading] = useState(admin),
+    [queueError, setQueueError] = useState(""),
+    [claimingId, setClaimingId] = useState<string | null>(null);
   const section = params.get("section") || "overview";
   const inv =
     ws?.invitations.find((v) => v.id === params.get("id")) ||
@@ -92,6 +116,32 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
         else setError(e.message);
       });
   }, [router]);
+  const refreshAssistanceQueue = useCallback(async () => {
+    setQueueLoading(true);
+    setQueueError("");
+    try {
+      const requests = await loadAdminAssistanceRequests();
+      setAssistanceRequests(requests);
+      return requests;
+    } catch (e) {
+      setQueueError(
+        e instanceof Error ? e.message : "Antrean bantuan belum dapat dimuat.",
+      );
+      throw e;
+    } finally {
+      setQueueLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    let active = true;
+    if (admin && ws?.user.role === "admin" && ws.mode === "supabase")
+      queueMicrotask(() => {
+        if (active) void refreshAssistanceQueue().catch(() => {});
+      });
+    return () => {
+      active = false;
+    };
+  }, [admin, ws?.user.role, ws?.mode, refreshAssistanceQueue]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 5500);
@@ -152,6 +202,57 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
     }
   };
   const notice = (text: string) => setToast({ text });
+  async function claimAssistance(request: AdminAssistanceRequest) {
+    setClaimingId(request.invitationId);
+    setQueueError("");
+    try {
+      const response = await fetch("/api/admin/assistance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invitationId: request.invitationId,
+          expectedVersion: request.documentVersion,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw new Error(
+          data.error ||
+            (response.status === 409
+              ? "Permintaan ini sudah berubah. Segarkan antrean sebelum mencoba lagi."
+              : "Permintaan belum berhasil diambil."),
+        );
+
+      setAssistanceRequests((current) =>
+        current.filter((item) => item.invitationId !== request.invitationId),
+      );
+      const [workspaceResult, queueResult] = await Promise.allSettled([
+        loadWorkspace(),
+        refreshAssistanceQueue(),
+      ]);
+      if (workspaceResult.status === "fulfilled") {
+        setWs(workspaceResult.value);
+        navigate("jobs", request.invitationId);
+      }
+      setToast({
+        text:
+          workspaceResult.status === "fulfilled" &&
+          queueResult.status === "fulfilled"
+            ? "Permintaan berhasil diambil. Pekerjaan kini ada di ruang admin."
+            : "Permintaan berhasil diambil, tetapi tampilan belum sepenuhnya diperbarui. Muat ulang halaman.",
+        error:
+          workspaceResult.status === "rejected" ||
+          queueResult.status === "rejected",
+      });
+    } catch (e) {
+      await refreshAssistanceQueue().catch(() => {});
+      setQueueError(
+        e instanceof Error ? e.message : "Permintaan belum berhasil diambil.",
+      );
+    } finally {
+      setClaimingId(null);
+    }
+  }
   async function logout() {
     if (dirty && !window.confirm("Perubahan belum disimpan. Tetap keluar?"))
       return;
@@ -347,17 +448,48 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
                 </select>
               </label>
             )}
-          {!inv ? (
-            <EmptyState
-              title="Kisah pertama kalian dimulai di sini."
-              text="Pilih tema dan mulai merangkai undangan. Semua isian bisa dilanjutkan nanti."
-              action={
-                <button className="btn primary" onClick={() => setCreate(true)}>
-                  <Plus size={16} />
-                  Buat undangan pertama
-                </button>
-              }
+          {admin && (section === "overview" || section === "jobs") && (
+            <AdminAssistanceQueue
+              mode={ws.mode}
+              requests={assistanceRequests}
+              loading={queueLoading}
+              error={queueError}
+              claimingId={claimingId}
+              onRefresh={() => void refreshAssistanceQueue().catch(() => {})}
+              onClaim={(request) => void claimAssistance(request)}
             />
+          )}
+          {!inv ? (
+            admin ? (
+              <EmptyState
+                title="Belum ada undangan yang ditugaskan."
+                text="Permintaan baru muncul di antrean bantuan. Setelah diambil, pekerjaan dan detail undangan akan tersedia di sini."
+                action={
+                  section !== "overview" && section !== "jobs" ? (
+                    <button
+                      className="btn secondary"
+                      onClick={() => navigate("jobs")}
+                    >
+                      Lihat antrean bantuan
+                    </button>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <EmptyState
+                title="Kisah pertama kalian dimulai di sini."
+                text="Pilih tema dan mulai merangkai undangan. Semua isian bisa dilanjutkan nanti."
+                action={
+                  <button
+                    className="btn primary"
+                    onClick={() => setCreate(true)}
+                  >
+                    <Plus size={16} />
+                    Buat undangan pertama
+                  </button>
+                }
+              />
+            )
           ) : (
             <>
               {section === "overview" &&
@@ -1158,6 +1290,96 @@ function AssistancePanel({
         )}
       </div>
     </div>
+  );
+}
+function AdminAssistanceQueue({
+  mode,
+  requests,
+  loading,
+  error,
+  claimingId,
+  onRefresh,
+  onClaim,
+}: {
+  mode: Workspace["mode"];
+  requests: AdminAssistanceRequest[];
+  loading: boolean;
+  error: string;
+  claimingId: string | null;
+  onRefresh: () => void;
+  onClaim: (request: AdminAssistanceRequest) => void;
+}) {
+  return (
+    <section className="panel admin-queue" aria-busy={loading}>
+      <div className="panel-header">
+        <div>
+          <h2>Antrean bantuan</h2>
+          <p>
+            Ambil permintaan untuk membuka detail dan mulai membantu pasangan.
+          </p>
+        </div>
+        {mode === "supabase" && (
+          <button
+            className="btn secondary small-btn"
+            onClick={onRefresh}
+            disabled={loading || claimingId !== null}
+          >
+            {loading ? <LoaderCircle size={14} className="spin" /> : null}
+            Segarkan
+          </button>
+        )}
+      </div>
+      {mode === "demo" ? (
+        <p className="padded muted">
+          Antrean bantuan tersedia ketika ruang admin terhubung ke Supabase.
+        </p>
+      ) : (
+        <div className="admin-queue-list">
+          {error && (
+            <p className="error-box" role="alert">
+              {error}
+            </p>
+          )}
+          {loading && !requests.length ? (
+            <p className="muted">Memuat permintaan bantuan…</p>
+          ) : error && !requests.length ? null : !requests.length ? (
+            <p className="muted">Belum ada permintaan yang menunggu admin.</p>
+          ) : (
+            requests.map((request) => {
+              const updatedAt = new Date(request.updatedAt);
+              return (
+                <div className="admin-queue-row" key={request.invitationId}>
+                  <div>
+                    <strong>
+                      Permintaan #{request.invitationId.slice(0, 8)}
+                    </strong>
+                    <small>
+                      Diperbarui{" "}
+                      {Number.isNaN(updatedAt.getTime())
+                        ? "baru saja"
+                        : updatedAt.toLocaleString("id-ID", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                    </small>
+                  </div>
+                  <button
+                    className="btn primary small-btn"
+                    disabled={claimingId !== null || loading}
+                    onClick={() => onClaim(request)}
+                  >
+                    {claimingId === request.invitationId ? (
+                      <LoaderCircle size={14} className="spin" />
+                    ) : null}
+                    Ambil pekerjaan
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 function AdminOverview({

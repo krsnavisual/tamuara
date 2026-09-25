@@ -1648,6 +1648,38 @@ td strong {
   font-size: 10px;
   margin-top: 4px;
 }
+.admin-queue-list {
+  padding: 0 23px 20px;
+}
+.admin-queue-list > .muted {
+  border-top: 1px solid #eee6dd;
+  padding-top: 15px;
+  margin: 0;
+  font-size: 12px;
+}
+.admin-queue-list .error-box {
+  margin: 0 0 14px;
+}
+.admin-queue-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 15px 0;
+  border-top: 1px solid #eee6dd;
+}
+.admin-queue-row strong {
+  display: block;
+  color: #6c5745;
+  font-size: 12px;
+}
+.admin-queue-row small {
+  display: block;
+  color: #a58f7d;
+  font-size: 10px;
+  margin-top: 5px;
+}
 .modal-backdrop {
   position: fixed;
   inset: 0;

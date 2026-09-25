@@ -503,6 +503,13 @@ export function mutateWorkspaceInStore(
         402,
         "Aktifkan paket Dirangkai Bersama untuk mendapatkan bantuan admin.",
       );
+      assert(
+        invitation.service.status === "none" ||
+          invitation.service.status === "submitted",
+        409,
+        "Permintaan bantuan sedang ditangani. Kirim pembaruan melalui pesan layanan.",
+        "ASSISTANCE_ALREADY_IN_PROGRESS",
+      );
       const brief = textValue(payload.brief, "Brief", 5000, true);
       invitation.service.brief = brief;
       invitation.service.status = "submitted";

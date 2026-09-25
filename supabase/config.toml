@@ -1,11 +1,11 @@
 # Reproducible local Supabase stack for Tamuara. This file contains no secrets.
-# Run from the repository root: npx supabase start
+# Run from the repository root: npx.cmd supabase start (PowerShell)
 project_id = "tamuara"
 
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:3001"
-additional_redirect_urls = ["http://localhost:3001"]
+additional_redirect_urls = ["http://127.0.0.1:3001/api/auth/callback", "http://127.0.0.1:3001/api/auth/callback?flow=recovery"]
 
 [auth.email]
 enable_signup = true

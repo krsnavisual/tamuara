@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
+  ...(process.env.TAMUARA_E2E_DIST_DIR === "true"
+    ? { distDir: ".next-e2e" }
+    : {}),
   poweredByHeader: false,
   devIndicators: false,
   logging: { incomingRequests: false },

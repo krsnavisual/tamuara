@@ -7,14 +7,27 @@ import {
   previewFromStore,
   publicInvitationFromStore,
 } from "./public";
-import { type Store, type StoredInvitation } from "./store";
+import { type MediaAsset, type Store, type StoredInvitation } from "./store";
 import { getSupabaseAdmin } from "./supabase-auth";
-import { mutateWorkspaceInStore, outputWorkspace } from "./workspace";
+import {
+  mutateWorkspaceInStore,
+  outputWorkspace,
+  requireInvitation,
+} from "./workspace";
 
 type DocumentRow = {
   invitation_id: string;
   state: StoredInvitation;
   version: number;
+};
+
+type MediaRow = {
+  id: string;
+  invitation_id: string;
+  object_path: string;
+  mime_type: string;
+  size_bytes: number;
+  created_at: string;
 };
 
 type AdapterDependencies = { admin: SupabaseClient; key: string };
@@ -93,6 +106,25 @@ async function loadAccessibleDocuments(
   return (result.data || []) as DocumentRow[];
 }
 
+async function loadInvitationMedia(
+  invitationId: string,
+  { admin }: AdapterDependencies,
+): Promise<MediaAsset[]> {
+  const result = await admin
+    .from("media_assets")
+    .select("id,invitation_id,object_path,mime_type,size_bytes,created_at")
+    .eq("invitation_id", invitationId);
+  failed(result.error);
+  return ((result.data || []) as MediaRow[]).map((row) => ({
+    id: row.id,
+    invitationId: row.invitation_id,
+    filename: row.object_path,
+    mime: row.mime_type,
+    size: row.size_bytes,
+    createdAt: row.created_at,
+  }));
+}
+
 async function commitDocument(
   invitation: StoredInvitation,
   expectedVersion: number,
@@ -133,6 +165,10 @@ async function mutateWorkspace(
     );
   const rows = await loadAccessibleDocuments(user, deps);
   const store = storeFrom(rows.map((row) => structuredClone(row.state)));
+  if (input.action === "save") {
+    const invitation = requireInvitation(store, input.invitationId, user);
+    store.media = await loadInvitationMedia(invitation.id, deps);
+  }
   mutateWorkspaceInStore(store, user, deps.key, input);
   const changed =
     input.action === "create"
@@ -147,7 +183,7 @@ async function mutateWorkspace(
       changed,
       original?.version ?? 0,
       user.id,
-      `invitation.${input.action}`,
+      `invitation.${input.action.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)}`,
       deps,
     );
   return workspace(user, deps);

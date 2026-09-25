@@ -22,6 +22,12 @@ const ownerB: User = {
   name: "Pasangan B",
   role: "owner",
 };
+const assignedAdmin: User = {
+  id: "11000000-0000-4000-8000-000000000003",
+  email: "admin@example.test",
+  name: "Admin Pendamping",
+  role: "admin",
+};
 
 type Row = Record<string, unknown>;
 
@@ -30,6 +36,7 @@ function fixture() {
     invitations: [],
     invitation_members: [],
     invitation_documents: [],
+    media_assets: [],
   };
   const commits: Row[] = [];
   let conflictOnce = false;
@@ -189,7 +196,7 @@ test("Supabase adapter uses document CAS and blocks production demo payment", as
   });
   assert.equal(updated.invitations[0].version, invitation.version + 1);
   assert.equal(data.commits.at(-1)?.p_expected_version, 1);
-  assert.equal(data.commits.at(-1)?.p_action, "invitation.regeneratePreview");
+  assert.equal(data.commits.at(-1)?.p_action, "invitation.regenerate_preview");
 });
 
 test("Supabase assistance waits for a real admin assignment and preserves one already assigned", async () => {
@@ -231,6 +238,127 @@ test("Supabase assistance waits for a real admin assignment and preserves one al
   assert.equal(
     (data.commits.at(-1)?.p_state as StoredInvitation).assignedAdminId,
     realAdminId,
+  );
+  assert.equal(data.commits.at(-1)?.p_action, "invitation.request_assistance");
+
+  data.state().service.status = "in_progress";
+  const commitsBeforeRetry = data.commits.length;
+  await assert.rejects(
+    data.adapter.mutateWorkspace(ownerA, {
+      action: "requestAssistance",
+      invitationId,
+      payload: { brief: "Jangan kembali ke antrean." },
+    }),
+    hasStatus(409),
+  );
+  assert.equal(data.state().service.status, "in_progress");
+  assert.equal(data.commits.length, commitsBeforeRetry);
+});
+
+test("Supabase save accepts media from its invitation and rejects another couple's media", async () => {
+  const data = fixture();
+  const first = (
+    await data.adapter.mutateWorkspace(ownerA, {
+      action: "create",
+      payload: { brideName: "Ayu", groomName: "Bima", theme: "classic" },
+    })
+  ).invitations[0];
+  const second = (
+    await data.adapter.mutateWorkspace(ownerB, {
+      action: "create",
+      payload: { brideName: "Citra", groomName: "Dewa", theme: "floral" },
+    })
+  ).invitations[0];
+  const ownMediaId = "22000000-0000-4000-8000-000000000001";
+  const foreignMediaId = "22000000-0000-4000-8000-000000000002";
+  for (const [id, invitationId] of [
+    [ownMediaId, first.id],
+    [foreignMediaId, second.id],
+  ])
+    data.tables.media_assets.push({
+      id,
+      invitation_id: invitationId,
+      object_path: `${invitationId}/${id}.webp`,
+      mime_type: "image/webp",
+      size_bytes: 1024,
+      created_at: new Date().toISOString(),
+    });
+
+  const saved = await data.adapter.mutateWorkspace(ownerA, {
+    action: "save",
+    invitationId: first.id,
+    version: first.version,
+    payload: {
+      content: {
+        ...first.content,
+        coverUrl: `/api/media/${ownMediaId}`,
+        gallery: [`/api/media/${ownMediaId}`],
+      },
+      theme: first.theme,
+      slug: first.slug,
+    },
+  });
+  assert.equal(
+    saved.invitations[0].content.coverUrl,
+    `/api/media/${ownMediaId}`,
+  );
+
+  const commitsAfterSave = data.commits.length;
+  await assert.rejects(
+    data.adapter.mutateWorkspace(ownerA, {
+      action: "save",
+      invitationId: first.id,
+      version: saved.invitations[0].version,
+      payload: {
+        content: {
+          ...saved.invitations[0].content,
+          gallery: [`/api/media/${foreignMediaId}`],
+        },
+        theme: first.theme,
+        slug: first.slug,
+      },
+    }),
+    hasStatus(403),
+  );
+  assert.equal(data.commits.length, commitsAfterSave);
+});
+
+test("assigned admin can save media belonging to the assigned invitation", async () => {
+  const data = fixture();
+  const invitation = (
+    await data.adapter.mutateWorkspace(ownerA, {
+      action: "create",
+      payload: { brideName: "Ayu", groomName: "Bima", theme: "classic" },
+    })
+  ).invitations[0];
+  const mediaId = "22000000-0000-4000-8000-000000000003";
+  data.state().assignedAdminId = assignedAdmin.id;
+  data.tables.invitation_members.push({
+    invitation_id: invitation.id,
+    user_id: assignedAdmin.id,
+    role: "assigned_admin",
+  });
+  data.tables.media_assets.push({
+    id: mediaId,
+    invitation_id: invitation.id,
+    object_path: `${invitation.id}/${mediaId}.webp`,
+    mime_type: "image/webp",
+    size_bytes: 1024,
+    created_at: new Date().toISOString(),
+  });
+  const updated = await data.adapter.mutateWorkspace(assignedAdmin, {
+    action: "save",
+    invitationId: invitation.id,
+    version: invitation.version,
+    payload: {
+      content: { ...invitation.content, coverUrl: `/api/media/${mediaId}` },
+      theme: invitation.theme,
+      slug: invitation.slug,
+    },
+  });
+  assert.equal(
+    updated.invitations[0].content.coverUrl,
+    `/api/media/${mediaId}`,
   );
 });
 

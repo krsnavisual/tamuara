@@ -162,7 +162,7 @@ test("new couple creates, edits, pays in demo, publishes and receives a real gue
   });
   const guestPage = await guestContext.newPage();
   await guestPage.goto(
-    `http://127.0.0.1:3001/u/${inv.slug}?guest=${guest.token}`,
+    new URL(`/u/${inv.slug}?guest=${guest.token}`, page.url()).toString(),
   );
   await guestPage.getByRole("button", { name: "Buka Undangan" }).click();
   await guestPage.getByLabel("Jumlah orang jika hadir").selectOption("2");
