@@ -192,6 +192,48 @@ test("Supabase adapter uses document CAS and blocks production demo payment", as
   assert.equal(data.commits.at(-1)?.p_action, "invitation.regeneratePreview");
 });
 
+test("Supabase assistance waits for a real admin assignment and preserves one already assigned", async () => {
+  const data = fixture();
+  const created = await data.adapter.mutateWorkspace(ownerA, {
+    action: "create",
+    payload: { brideName: "Ayu", groomName: "Bima", theme: "classic" },
+  });
+  const invitationId = created.invitations[0].id;
+  data.state().entitlement = {
+    orderId: "TEST-ASSISTED",
+    plan: "assisted",
+    guestLimit: 500,
+    photoLimit: 20,
+    maxRevisions: 2,
+    expiresAt: "2031-12-12T00:00:00.000Z",
+  };
+
+  const submitted = await data.adapter.mutateWorkspace(ownerA, {
+    action: "requestAssistance",
+    invitationId,
+    payload: { brief: "Bantu menata cerita pernikahan kami." },
+  });
+  assert.equal(submitted.invitations[0].service.status, "submitted");
+  assert.equal(submitted.invitations[0].assignedAdminId, undefined);
+  assert.equal(
+    (data.commits.at(-1)?.p_state as StoredInvitation).assignedAdminId,
+    undefined,
+  );
+
+  const realAdminId = "11000000-0000-4000-8000-000000000003";
+  data.state().assignedAdminId = realAdminId;
+  const resubmitted = await data.adapter.mutateWorkspace(ownerA, {
+    action: "requestAssistance",
+    invitationId,
+    payload: { brief: "Bantu juga memeriksa foto pilihan kami." },
+  });
+  assert.equal(resubmitted.invitations[0].assignedAdminId, realAdminId);
+  assert.equal(
+    (data.commits.at(-1)?.p_state as StoredInvitation).assignedAdminId,
+    realAdminId,
+  );
+});
+
 test("Supabase public adapter scopes guest access and retries an RSVP conflict", async () => {
   const data = fixture();
   await data.adapter.mutateWorkspace(ownerA, {

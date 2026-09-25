@@ -8,6 +8,7 @@
     "start": "next start --hostname 127.0.0.1",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
+    "test:supabase:local": "tsx scripts/supabase-live-smoke.ts",
     "lint": "eslint .",
     "test:e2e": "playwright test",
     "format": "prettier --write src tests"

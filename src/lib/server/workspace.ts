@@ -172,7 +172,9 @@ export async function mutateWorkspace(
   input: Mutation,
 ) {
   return withStore(({ store, key }) =>
-    mutateWorkspaceInStore(store, requireUser(store, token), key, input),
+    mutateWorkspaceInStore(store, requireUser(store, token), key, input, {
+      assistanceAdminId: "demo-admin",
+    }),
   );
 }
 
@@ -181,6 +183,7 @@ export function mutateWorkspaceInStore(
   user: User,
   key: string,
   input: Mutation,
+  options: { assistanceAdminId?: string } = {},
 ) {
   const payload = inputPayload(input.payload);
   const now = new Date().toISOString();
@@ -503,7 +506,7 @@ export function mutateWorkspaceInStore(
       const brief = textValue(payload.brief, "Brief", 5000, true);
       invitation.service.brief = brief;
       invitation.service.status = "submitted";
-      invitation.assignedAdminId = "demo-admin";
+      invitation.assignedAdminId ??= options.assistanceAdminId;
       break;
     }
     case "updateService": {

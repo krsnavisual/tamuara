@@ -2,6 +2,18 @@ import { AppError } from "./errors";
 
 export type BackendMode = "local" | "supabase";
 
+/** Prefer current Supabase API keys while accepting legacy projects. */
+export function supabaseApiKeys() {
+  return {
+    publishableKey:
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    secretKey:
+      process.env.SUPABASE_SECRET_KEY ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+}
+
 /** Selects the storage and authentication backend without silently using demo data in production. */
 export function backendMode(): BackendMode {
   const requested = process.env.TAMUARA_BACKEND;
@@ -15,10 +27,9 @@ export function backendMode(): BackendMode {
 
   if (requested === "supabase") {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const { publishableKey, secretKey } = supabaseApiKeys();
     const encryptionKey = process.env.TAMUARA_TOKEN_ENCRYPTION_KEY;
-    if (!url || !anonKey || !serviceKey || !encryptionKey) {
+    if (!url || !publishableKey || !secretKey || !encryptionKey) {
       throw new AppError(
         503,
         "Koneksi Supabase belum dikonfigurasi.",

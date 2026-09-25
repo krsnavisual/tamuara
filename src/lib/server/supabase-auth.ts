@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { NextRequest, NextResponse } from "next/server";
 import type { User } from "@/lib/types";
 import { AppError } from "./errors";
-import { backendMode } from "./backend-config";
+import { backendMode, supabaseApiKeys } from "./backend-config";
 
 function credentials() {
   if (backendMode() !== "supabase") {
@@ -13,10 +13,11 @@ function credentials() {
       "BACKEND_NOT_CONFIGURED",
     );
   }
+  const { publishableKey, secretKey } = supabaseApiKeys();
   return {
     url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    publishableKey: publishableKey!,
+    secretKey: secretKey!,
   };
 }
 
@@ -26,7 +27,7 @@ function credentials() {
  * refreshed session reaches the browser.
  */
 export function createSupabaseServerClient(request: NextRequest) {
-  const { url, anonKey } = credentials();
+  const { url, publishableKey } = credentials();
   const cookieJar = new Map(
     request.cookies.getAll().map((cookie) => [cookie.name, cookie.value]),
   );
@@ -35,7 +36,7 @@ export function createSupabaseServerClient(request: NextRequest) {
     { name: string; value: string; options: Record<string, unknown> }
   >();
   const pendingHeaders = new Map<string, string>();
-  const client = createServerClient(url, anonKey, {
+  const client = createServerClient(url, publishableKey, {
     cookies: {
       getAll() {
         return [...cookieJar].map(([name, value]) => ({ name, value }));
@@ -118,10 +119,10 @@ export async function getSupabaseUser(request: NextRequest): Promise<User> {
 
 export const getSupabaseIdentity = getSupabaseUser;
 
-/** Uses the service role only in server handlers after their own authorization. */
+/** Uses the elevated key only in server handlers after their own authorization. */
 export function getSupabaseAdmin() {
-  const { url, serviceKey } = credentials();
-  return createClient(url, serviceKey, {
+  const { url, secretKey } = credentials();
+  return createClient(url, secretKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

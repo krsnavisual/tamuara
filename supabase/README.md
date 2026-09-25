@@ -4,7 +4,7 @@
 
 Aplikasi memakai repository lokal secara default saat pengembangan. Akun, undangan, sesi, RSVP, bantuan admin, dan transaksi simulasi disimpan di `.data/tamuara.json`; gambar berada di `.data/media`. Salinan token terenkripsi memakai `.data/encryption.key`. Simpan database, media, dan kunci bersama saat membuat backup lokal. Jangan commit atau membagikan folder `.data`.
 
-Migrasi dan adapter Supabase untuk Auth, undangan, publik, dan media telah ditulis. Belum ada proyek Supabase atau akun merchant, sehingga migrasi belum dijalankan ke layanan nyata dan adapter belum diuji end-to-end dengan provider. Aktifkan adapter hanya setelah migrasi diterapkan: `TAMUARA_BACKEND=supabase`. Checkout Midtrans dan webhook belum dibuat; mode Supabase menolak checkout dan pembayaran simulasi.
+Migrasi dan adapter Supabase untuk Auth, undangan, publik, dan media telah ditulis. Proyek Supabase Tamuara sudah tersedia dan terhubung ke GitHub, tetapi deploy production otomatis nonaktif. Migrasi belum dijalankan ke proyek online dan adapter belum diuji end-to-end dengan provider. Aktifkan adapter hanya setelah migrasi diterapkan: `TAMUARA_BACKEND=supabase`. Akun merchant belum tersedia; checkout Midtrans dan webhook belum dibuat. Mode Supabase menolak checkout dan pembayaran simulasi.
 
 ## Menjalankan aplikasi lokal
 
@@ -21,11 +21,11 @@ Migrasi dan adapter Supabase untuk Auth, undangan, publik, dan media telah ditul
 
 ```powershell
 npx supabase start
-npx supabase db reset --local
 npx supabase test db --local
+npm run test:supabase:local
 ```
 
-`db reset --local` **menghapus data di database Supabase lokal** dan menerapkan ulang semua migrasi. Jangan gunakan perintah ini pada proyek staging/produksi. Alamat API, kunci publik, kunci service role, dan Mailpit lokal ditampilkan oleh `npx supabase status`. Salin hanya nilai yang diperlukan ke `.env.local`; kunci service role tidak boleh diberi awalan `NEXT_PUBLIC_`.
+`npx supabase start` menerapkan tiga migrasi pada database lokal saat pertama kali dijalankan. Dua berkas pgTAP telah lulus dengan 49 pemeriksaan. `test:supabase:local` menguji Auth, profil, draf, audit, dan isolasi dua pasangan melalui route aplikasi, lalu membersihkan data sintetisnya; perintah ini menolak URL API selain `http://127.0.0.1:54321`. Jika perlu mengulang migrasi dari awal, `npx supabase db reset --local` **menghapus data di database Supabase lokal**. Jangan gunakan perintah reset pada proyek staging/produksi. Alamat API, kunci publik, kunci rahasia, dan Mailpit lokal tersedia melalui `npx supabase status`. Salin hanya nilai yang diperlukan ke `.env.local`; kunci rahasia tidak boleh diberi awalan `NEXT_PUBLIC_`.
 
 Migrasi tambahan `202609250002_harden_access.sql` memperketat hak baca token dan metadata pembayaran serta mengunci kepemilikan pesanan ke undangan. `202609250003_invitation_documents.sql` menyediakan penyimpanan dokumen undangan penuh sebagai jembatan dari model domain yang sudah berjalan. `invitation_documents.state` berisi data privat sehingga hanya server dengan service role yang diberi akses. `preview_token_hash` adalah kolom generated dengan indeks unik untuk pencarian tautan pratinjau tanpa membuka isi dokumen.
 
@@ -44,7 +44,7 @@ Bucket `tamuara-private` tidak publik. Path media wajib diawali UUID undangan; p
 ## Langkah aktivasi setelah akun layanan tersedia
 
 1. Siapkan proyek Supabase staging dan production terpisah. Jalankan migrasi terlebih dahulu di staging, lalu uji policy melalui dua akun owner dan admin yang berbeda.
-2. Konfigurasi URL proyek, publishable/anon key, serta secret/service-role key hanya di server. Pilih sistem kunci token tetap untuk enkripsi AES-256-GCM, simpan sebagai rahasia server, dan dokumentasikan pemulihannya.
+2. Konfigurasi URL proyek, publishable key untuk klien Auth, serta secret key hanya di server. Nama kunci legacy `anon` dan `service_role` masih diterima sebagai fallback. Pilih sistem kunci token tetap untuk enkripsi AES-256-GCM, simpan sebagai rahasia server, dan dokumentasikan pemulihannya.
 3. Isi `.env.local` dari `.env.example`, set `TAMUARA_BACKEND=supabase`, dan buat kunci token stabil 32 byte: `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Simpan kunci ini di secret manager dan backup aman. Jangan memakai kunci service role di browser.
 4. Konfigurasi Supabase Auth: konfirmasi email, template SMTP, site URL, dan redirect URL `/api/auth/callback` serta `/api/auth/callback?flow=recovery`. Uji daftar, login, keluar, dan pemulihan kata sandi dengan akun nyata.
 5. Uji isolasi undangan dua pasangan, penugasan admin, konflik editor/RSVP, pratinjau yang dicabut, media privat, dan snapshot terbit pada staging. Adapter server mempertahankan kontrak API lokal tetapi belum diuji pada provider nyata.
@@ -57,10 +57,12 @@ Bucket `tamuara-private` tidak publik. Path media wajib diawali UUID undangan; p
 | --- | --- | --- |
 | `TAMUARA_BACKEND` | `local` atau `supabase` | Wajib `supabase` untuk adapter baru |
 | `NEXT_PUBLIC_SUPABASE_URL` | URL proyek | Dipakai Auth/server |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Kunci public legacy/anon proyek | Dipakai Auth; jangan isi service-role key di sini |
-| `SUPABASE_SERVICE_ROLE_KEY` | Kredensial server untuk operasi terkontrol | Dipakai server; rahasia |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Kunci publishable proyek | Dipakai Auth; lebih diutamakan dari kunci anon legacy |
+| `SUPABASE_SECRET_KEY` | Kunci server untuk operasi terkontrol | Dipakai server; rahasia, lebih diutamakan dari service role legacy |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Kunci anon legacy | Fallback saat publishable key kosong |
+| `SUPABASE_SERVICE_ROLE_KEY` | Kunci service role legacy | Fallback saat secret key kosong; rahasia |
 | `TAMUARA_TOKEN_ENCRYPTION_KEY` | Kunci enkripsi token produksi | Dipakai server; 64 karakter heksadesimal |
 | `MIDTRANS_SERVER_KEY` | Checkout dan verifikasi pembayaran | Dicadangkan; rahasia server |
 | `MIDTRANS_IS_PRODUCTION` | Pemilihan sandbox/live | Dicadangkan; mulai dari `false` |
 
-Dokumentasi acuan: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Storage access control](https://supabase.com/docs/guides/storage/security/access-control), [Midtrans webhooks](https://docs.midtrans.com/docs/https-notification-webhooks). Migrasi ini perlu diuji pada instance Supabase sebelum dinyatakan siap produksi.
+Dokumentasi acuan: [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys), [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Storage access control](https://supabase.com/docs/guides/storage/security/access-control), [Midtrans webhooks](https://docs.midtrans.com/docs/https-notification-webhooks). Migrasi ini perlu diuji pada instance Supabase sebelum dinyatakan siap produksi.

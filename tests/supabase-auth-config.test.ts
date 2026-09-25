@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { backendMode } from "../src/lib/server/backend-config";
+import {
+  backendMode,
+  supabaseApiKeys,
+} from "../src/lib/server/backend-config";
 
 const settings = [
   "NODE_ENV",
@@ -8,7 +11,9 @@ const settings = [
   "TAMUARA_LOCAL_PREVIEW",
   "TAMUARA_APP_URL",
   "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "SUPABASE_SECRET_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
   "TAMUARA_TOKEN_ENCRYPTION_KEY",
 ] as const;
@@ -95,6 +100,43 @@ test("Supabase mode needs all keys and a canonical production URL", () => {
       NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
       SUPABASE_SERVICE_ROLE_KEY: "service-key",
+      TAMUARA_TOKEN_ENCRYPTION_KEY: "a".repeat(64),
+    },
+    () => assert.equal(backendMode(), "supabase"),
+  );
+});
+
+test("Supabase mode accepts current API keys and prefers them over legacy keys", () => {
+  withEnvironment(
+    {
+      NODE_ENV: "production",
+      TAMUARA_BACKEND: "supabase",
+      TAMUARA_APP_URL: "https://tamuara.example",
+      NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_current",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "legacy-anon",
+      SUPABASE_SECRET_KEY: "sb_secret_current",
+      SUPABASE_SERVICE_ROLE_KEY: "legacy-service",
+      TAMUARA_TOKEN_ENCRYPTION_KEY: "a".repeat(64),
+    },
+    () => {
+      assert.equal(backendMode(), "supabase");
+      assert.deepEqual(supabaseApiKeys(), {
+        publishableKey: "sb_publishable_current",
+        secretKey: "sb_secret_current",
+      });
+    },
+  );
+});
+
+test("Supabase mode accepts current API keys without legacy values", () => {
+  withEnvironment(
+    {
+      NODE_ENV: "development",
+      TAMUARA_BACKEND: "supabase",
+      NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_current",
+      SUPABASE_SECRET_KEY: "sb_secret_current",
       TAMUARA_TOKEN_ENCRYPTION_KEY: "a".repeat(64),
     },
     () => assert.equal(backendMode(), "supabase"),

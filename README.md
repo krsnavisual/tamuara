@@ -44,7 +44,7 @@ Contoh variabel tersedia di `.env.example`. Salin menjadi `.env.local` jika dipe
 
 Repository lokal mendukung satu proses Node.js dengan disk persisten. Penulisan data diantrikan dan menggunakan file pengganti atomik. Jangan menjalankan dua server yang menulis direktori data yang sama. Untuk backup lokal konsisten, hentikan server dan salin **seluruh** folder `.data` ke lokasi privat; pemulihan menggunakan salinan database, media, dan kunci yang sama. Uji pemulihan operasional sebelum memakai data pelanggan.
 
-**Supabase dan merchant belum tersedia**, sesuai arahan pengguna. Adapter Supabase/Auth/Storage dipilih dengan `TAMUARA_BACKEND=supabase` setelah migrasi diterapkan dan kredensial diisi. Integrasi tersebut belum diuji dengan proyek Supabase nyata. Lihat [panduan Supabase](supabase/README.md) untuk langkah staging. Konfirmasi dan pemulihan email memerlukan pengaturan Auth serta layanan email pada proyek itu. Checkout Midtrans dan webhook belum terhubung; mode Supabase menonaktifkan pembayaran simulasi dan tidak dapat menerbitkan undangan tanpa entitlement.
+Proyek Supabase Tamuara sudah tersedia dan terhubung ke repository GitHub, dengan deploy production otomatis tetap nonaktif. Adapter Supabase/Auth/Storage dipilih dengan `TAMUARA_BACKEND=supabase` setelah migrasi diterapkan dan kredensial diisi. Integrasi tersebut belum diuji dengan proyek Supabase online. Lihat [panduan Supabase](supabase/README.md) untuk langkah pengujian. Konfirmasi dan pemulihan email memerlukan pengaturan Auth serta layanan email pada proyek itu. Akun merchant belum tersedia; checkout Midtrans dan webhook belum terhubung. Mode Supabase menonaktifkan pembayaran simulasi dan tidak dapat menerbitkan undangan tanpa entitlement.
 
 Adapter memakai satu dokumen JSONB per undangan dengan commit transaksional dan cek versi untuk menjaga isolasi dan mencegah data tertimpa. Tabel terstruktur sudah disiapkan untuk pengembangan berikutnya. RSVP bertrafik tinggi perlu dipindahkan ke transaksi khusus. Simpan kunci `TAMUARA_TOKEN_ENCRYPTION_KEY` bersama backup agar tautan tamu dan pratinjau tetap dapat dibaca.
 
@@ -69,9 +69,11 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Pengujian backend menggunakan direktori sementara dan klien Supabase tiruan untuk memeriksa isolasi pelanggan, pembayaran simulasi, konflik versi, publikasi, token, kuota RSVP, moderasi, akses media, serta pemeriksaan asal request. Pengujian browser menjalankan alur pasangan–tamu dan admin, impor CSV, serta layout desktop/ponsel di Chromium. Hasil terakhir: **19 tes backend/HTTP dan 5 tes browser lulus**.
+Untuk pengujian provider Supabase pada mesin lokal, jalankan `npx supabase start`, `npx supabase test db --local`, lalu `npm run test:supabase:local`. Pengujian terakhir berhasil dengan **49 pemeriksaan SQL** serta smoke test Auth, draf, audit, dan isolasi dua pasangan.
 
-Playwright memakai port 3001 dan dapat memakai ulang server yang sudah aktif. Jika belum ada, konfigurasi tes menjalankannya. Browser tests membuat akun sintetis pada data lokal; tidak mengirim email atau pesan WhatsApp. Screenshot berada di `test-results/` dan tidak masuk Git. Safari/iOS fisik, provider eksternal, dan SQL pada instance Supabase belum diverifikasi.
+Pengujian backend menggunakan direktori sementara dan klien Supabase tiruan untuk memeriksa isolasi pelanggan, pembayaran simulasi, konflik versi, publikasi, token, kuota RSVP, moderasi, akses media, serta pemeriksaan asal request. Pengujian browser menjalankan alur pasangan–tamu dan admin, impor CSV, serta layout desktop/ponsel di Chromium. Hasil terakhir: **22 tes backend/HTTP dan 5 tes browser lulus**.
+
+Playwright memakai port 3001 dan dapat memakai ulang server yang sudah aktif. Jika belum ada, konfigurasi tes menjalankannya. Browser tests membuat akun sintetis pada data lokal; tidak mengirim email atau pesan WhatsApp. Screenshot berada di `test-results/` dan tidak masuk Git. Tiga migrasi dan 49 pemeriksaan pgTAP telah lulus pada Supabase lokal. Safari/iOS fisik dan proyek Supabase online belum diverifikasi.
 
 ## Struktur
 

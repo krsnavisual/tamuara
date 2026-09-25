@@ -10,4 +10,5 @@ playwright-report/
 *.log
 backups/
 supabase/.temp/
+supabase/.branches/
 marketing-*.png
