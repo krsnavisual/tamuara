@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="248" height="248" viewBox="42 42 164 164" role="img" aria-label="Lambang Tamuara">
+<title>Lambang Tamuara</title>
+<g transform="translate(124 124) scale(1.0) translate(-124 -124)" fill="none">
+  <circle cx="124" cy="124" r="74" fill="#1C3B34"/>
+  <circle cx="124" cy="124" r="65" stroke="#B59665" stroke-width="1.7"/>
+  <path d="M88 95 H160 M124 95 V158" stroke="#F7F3EC" stroke-width="7.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M90 125 C107 123 116 139 124 158 C132 139 141 123 158 125" stroke="#B59665" stroke-width="5.1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>
