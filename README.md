@@ -2,15 +2,15 @@
 
 **Kisah kalian, dirayakan bersama.**
 
-Web app undangan pernikahan dengan layanan mandiri dan bantuan admin. Mode lokal berjalan tanpa akun eksternal; adapter Supabase untuk akun, data undangan, dan media telah disiapkan untuk tahap staging.
+Web app undangan pernikahan dengan layanan mandiri dan bantuan admin. Tanpa `.env.local`, mode demo lokal berjalan tanpa akun eksternal. Adapter Supabase untuk akun, data undangan, dan media sudah terhubung ke proyek Tamuara untuk uji integrasi sementara.
 
 ## Jalankan
 
 Prasyarat: Node.js 22 LTS dan npm. Dependency sudah dikunci dalam `package-lock.json`.
 
 ```powershell
-npm ci
-npm run dev
+npm.cmd ci
+npm.cmd run dev
 ```
 
 Buka alamat yang ditampilkan terminal, biasanya `http://127.0.0.1:3000`. Preview pada sesi pengembangan ini dijalankan di **http://127.0.0.1:3001**. Untuk menggunakan port tersebut secara eksplisit:
@@ -19,9 +19,9 @@ Buka alamat yang ditampilkan terminal, biasanya `http://127.0.0.1:3000`. Preview
 node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port 3001
 ```
 
-Tidak diperlukan kredensial eksternal untuk versi lokal. Pada `/masuk`, pilih **Demo pasangan** atau **Demo admin**, atau buat akun baru melalui `/daftar`.
+Tidak diperlukan kredensial eksternal untuk mode demo lokal. Pada `/masuk`, pilih **Demo pasangan** atau **Demo admin**, atau buat akun baru melalui `/daftar`. Jika `.env.local` berisi `TAMUARA_BACKEND=supabase`, aplikasi memakai akun Supabase dan tombol demo tidak tersedia.
 
-## Yang dapat dicoba
+## Yang dapat dicoba pada mode demo lokal
 
 1. **Pasangan:** dashboard → buat undangan → isi pasangan/acara → simpan draf → pilih paket → simulasikan lunas → terbitkan.
 2. **Tamu:** tambahkan penerima → bagikan tautan personal → buka dalam browser/sesi terpisah → isi RSVP dan ucapan.
@@ -44,16 +44,16 @@ Contoh variabel tersedia di `.env.example`. Salin menjadi `.env.local` jika dipe
 
 Repository lokal mendukung satu proses Node.js dengan disk persisten. Penulisan data diantrikan dan menggunakan file pengganti atomik. Jangan menjalankan dua server yang menulis direktori data yang sama. Untuk backup lokal konsisten, hentikan server dan salin **seluruh** folder `.data` ke lokasi privat; pemulihan menggunakan salinan database, media, dan kunci yang sama. Uji pemulihan operasional sebelum memakai data pelanggan.
 
-Proyek Supabase Tamuara sudah tersedia dan terhubung ke repository GitHub, dengan deploy production otomatis tetap nonaktif. Adapter Supabase/Auth/Storage dipilih dengan `TAMUARA_BACKEND=supabase` setelah migrasi diterapkan dan kredensial diisi. Integrasi tersebut belum diuji dengan proyek Supabase online. Lihat [panduan Supabase](supabase/README.md) untuk langkah pengujian. Konfirmasi dan pemulihan email memerlukan pengaturan Auth serta layanan email pada proyek itu. Akun merchant belum tersedia; checkout Midtrans dan webhook belum terhubung. Mode Supabase menonaktifkan pembayaran simulasi dan tidak dapat menerbitkan undangan tanpa entitlement.
+Proyek Supabase Tamuara terhubung ke repository GitHub, dengan deploy production otomatis tetap nonaktif. Tiga migrasi sudah diterapkan ke proyek tersebut. Smoke test online dengan dua akun sintetis telah meluluskan login, profil otomatis, draf, audit, dan isolasi pasangan; semua data uji dihapus dan jumlahnya diverifikasi kembali. Proyek ini dipakai sementara sebagai lingkungan uji. Lihat [panduan Supabase](supabase/README.md) untuk menjalankan ulang tes. Konfirmasi dan pemulihan email masih memerlukan pengaturan Auth serta layanan email. Akun merchant belum tersedia; checkout Midtrans dan webhook belum terhubung. Mode Supabase menonaktifkan pembayaran simulasi dan tidak dapat menerbitkan undangan tanpa entitlement.
 
 Adapter memakai satu dokumen JSONB per undangan dengan commit transaksional dan cek versi untuk menjaga isolasi dan mencegah data tertimpa. Tabel terstruktur sudah disiapkan untuk pengembangan berikutnya. RSVP bertrafik tinggi perlu dipindahkan ke transaksi khusus. Simpan kunci `TAMUARA_TOKEN_ENCRYPTION_KEY` bersama backup agar tautan tamu dan pratinjau tetap dapat dibaca.
 
 `npm run start` menolak API data dalam production tanpa konfigurasi Supabase. Untuk memeriksa build **di mesin lokal**:
 
 ```powershell
-npm run build
+npm.cmd run build
 $env:TAMUARA_LOCAL_PREVIEW = 'true'
-npm run start
+npm.cmd run start
 ```
 
 Jangan memakai opsi preview lokal sebagai konfigurasi layanan pelanggan. Production akan memakai database transaksional dan provider terverifikasi.
@@ -61,19 +61,19 @@ Jangan memakai opsi preview lokal sebagai konfigurasi layanan pelanggan. Product
 ## Verifikasi
 
 ```powershell
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npx playwright install chromium
-npm run test:e2e
+npm.cmd run lint
+npm.cmd run typecheck
+npm.cmd test
+npm.cmd run build
+npx.cmd playwright install chromium
+npm.cmd run test:e2e
 ```
 
-Untuk pengujian provider Supabase pada mesin lokal, jalankan `npx supabase start`, `npx supabase test db --local`, lalu `npm run test:supabase:local`. Pengujian terakhir berhasil dengan **49 pemeriksaan SQL** serta smoke test Auth, draf, audit, dan isolasi dua pasangan.
+Untuk pengujian provider Supabase pada mesin lokal, jalankan `npx.cmd supabase start`, `npx.cmd supabase test db --local`, lalu `npm.cmd run test:supabase:local` di PowerShell. Pengujian terakhir berhasil dengan **49 pemeriksaan SQL**. Smoke test online menguji Auth, draf, audit, dan isolasi dua pasangan dengan pembersihan data sintetis.
 
 Pengujian backend menggunakan direktori sementara dan klien Supabase tiruan untuk memeriksa isolasi pelanggan, pembayaran simulasi, konflik versi, publikasi, token, kuota RSVP, moderasi, akses media, serta pemeriksaan asal request. Pengujian browser menjalankan alur pasangan–tamu dan admin, impor CSV, serta layout desktop/ponsel di Chromium. Hasil terakhir: **22 tes backend/HTTP dan 5 tes browser lulus**.
 
-Playwright memakai port 3001 dan dapat memakai ulang server yang sudah aktif. Jika belum ada, konfigurasi tes menjalankannya. Browser tests membuat akun sintetis pada data lokal; tidak mengirim email atau pesan WhatsApp. Screenshot berada di `test-results/` dan tidak masuk Git. Tiga migrasi dan 49 pemeriksaan pgTAP telah lulus pada Supabase lokal. Safari/iOS fisik dan proyek Supabase online belum diverifikasi.
+Playwright memakai port 3001 dan dapat memakai ulang server yang sudah aktif. Jika belum ada, konfigurasi tes menjalankannya. Browser tests membuat akun sintetis pada data lokal; tidak mengirim email atau pesan WhatsApp. Screenshot berada di `test-results/` dan tidak masuk Git. Tiga migrasi dan 49 pemeriksaan pgTAP telah lulus pada Supabase lokal. Alur dasar telah lulus pada proyek Supabase online; Safari/iOS fisik, email nyata, media privat, penugasan admin, publikasi, dan pembayaran belum diuji end-to-end di sana.
 
 ## Struktur
 
