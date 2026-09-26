@@ -10,6 +10,7 @@
     "test": "tsx --test tests/*.test.ts",
     "test:supabase:local": "tsx scripts/supabase-live-smoke.ts",
     "test:supabase:remote": "tsx scripts/supabase-remote-smoke.ts",
+    "test:payments:local": "tsx scripts/supabase-payment-smoke.ts",
     "lint": "eslint .",
     "test:e2e": "playwright test",
     "format": "prettier --write src tests"

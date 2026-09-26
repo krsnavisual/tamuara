@@ -1,5 +1,11 @@
 "use client";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -181,7 +187,11 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
             ? "Undangan berhasil diterbitkan."
             : action === "demoPay"
               ? "Simulasi pembayaran selesai. Paket sudah aktif."
-              : "Perubahan tersimpan.",
+              : action === "checkout" && result.mode === "supabase"
+                ? "Pesanan sandbox tersedia. Periksa riwayat pesanan untuk melanjutkan."
+                : action === "refreshPayment"
+                  ? "Status pembayaran diperbarui dari penyedia sandbox."
+                  : "Perubahan tersimpan.",
       });
       if (action === "create") {
         setCreate(false);
@@ -192,6 +202,13 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
       }
       return true;
     } catch (e) {
+      if (action === "checkout" || action === "refreshPayment") {
+        // A connection failure can occur after the server saved the order.
+        // Recover the saved state before offering another action.
+        await loadWorkspace()
+          .then(setWs)
+          .catch(() => {});
+      }
       setToast({
         text: e instanceof Error ? e.message : "Perubahan belum tersimpan.",
         error: true,
@@ -539,7 +556,8 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
                   run={run}
                   busy={busy}
                   mode={ws.mode}
-                  readOnly={admin}
+                  readOnly={admin || inv.ownerId !== ws.user.id}
+                  payments={ws.payments}
                 />
               )}
               {(section === "help" || section === "jobs") && (
@@ -937,20 +955,107 @@ function ThemeGallery({
     </>
   );
 }
+function sandboxPaymentUrl(value?: string): string | undefined {
+  if (!value || value.length > 2048) return;
+  try {
+    const url = new URL(value);
+    if (
+      url.origin === "https://app.sandbox.midtrans.com" &&
+      !url.username &&
+      !url.password &&
+      !url.hash &&
+      url.pathname.startsWith("/snap/")
+    )
+      return url.href;
+  } catch {
+    return;
+  }
+}
+
 function Billing({
   inv,
   run,
   busy,
   mode,
   readOnly,
+  payments,
 }: {
   inv: Invitation;
   run: RunMutation;
   busy: boolean;
-  mode: string;
+  mode: Workspace["mode"];
   readOnly: boolean;
+  payments?: Workspace["payments"];
 }) {
-  const active = inv.orders.filter((o) => o.status === "paid").at(-1);
+  const checkoutKeys = useRef(new Map<string, string>());
+  const creatingCheckout = useRef(false);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  useEffect(() => {
+    const expiry = new Date(inv.expiresAt || "").getTime();
+    if (!Number.isFinite(expiry) || expiry <= currentTime) return;
+    const timer = setTimeout(
+      () => setCurrentTime(Date.now()),
+      Math.min(Math.max(0, expiry - Date.now() + 1), 2_147_483_647),
+    );
+    return () => clearTimeout(timer);
+  }, [inv.expiresAt, currentTime]);
+  const paidHistory = inv.orders.some(
+    (order) =>
+      order.status === "paid" || order.status === "refunded" || !!order.paidAt,
+  );
+  const active =
+    inv.expiresAt && new Date(inv.expiresAt).getTime() > currentTime
+      ? inv.orders.filter((o) => o.status === "paid").at(-1)
+      : undefined;
+  const renewalUnavailable = mode === "supabase" && paidHistory && !active;
+  const sandboxEnabled =
+    mode === "supabase" &&
+    payments?.enabled === true &&
+    payments.environment === "sandbox";
+  const unresolved = inv.orders.some((o) =>
+    ["pending", "review"].includes(o.status),
+  );
+  const plans = sandboxEnabled ? payments.plans : PLANS;
+  async function checkout(plan: string) {
+    if (mode === "demo") {
+      await run("checkout", { plan });
+      return;
+    }
+    if (
+      !sandboxEnabled ||
+      readOnly ||
+      unresolved ||
+      renewalUnavailable ||
+      creatingCheckout.current
+    )
+      return;
+    creatingCheckout.current = true;
+    try {
+      const storageKey = `tamuara:checkout:${inv.id}:${plan}`;
+      let key = checkoutKeys.current.get(storageKey);
+      if (!key) {
+        try {
+          key = window.sessionStorage.getItem(storageKey) || undefined;
+        } catch {
+          // The same mounted view still retains the key if storage is unavailable.
+        }
+        if (!key || !/^[a-f0-9-]{36}$/i.test(key)) key = crypto.randomUUID();
+        checkoutKeys.current.set(storageKey, key);
+        try {
+          window.sessionStorage.setItem(storageKey, key);
+        } catch {}
+      }
+      const saved = await run("checkout", { plan, idempotencyKey: key });
+      if (saved) {
+        checkoutKeys.current.delete(storageKey);
+        try {
+          window.sessionStorage.removeItem(storageKey);
+        } catch {}
+      }
+    } finally {
+      creatingCheckout.current = false;
+    }
+  }
   return (
     <>
       <div className="inline-note">
@@ -958,14 +1063,27 @@ function Billing({
         <span>
           {mode === "demo"
             ? "Pembayaran di versi lokal adalah simulasi. Tidak ada dana yang ditagihkan."
-            : "Pembayaran belum dibuka. Kalian dapat menyiapkan draf; aktivasi paket tersedia setelah layanan pembayaran terhubung."}
+            : sandboxEnabled
+              ? "Mode uji Midtrans sandbox. Gunakan data pembayaran uji; transaksi ini tidak menagih dana sungguhan. Paket yang aktif di sini digunakan untuk pengujian."
+              : "Pembayaran belum dibuka. Kalian dapat menyiapkan draf; aktivasi paket tersedia setelah layanan pembayaran terhubung."}
         </span>
       </div>
+      {renewalUnavailable && (
+        <div className="inline-note">
+          <ShieldCheck size={19} />
+          <span>
+            Paket sebelumnya sudah berakhir atau dinonaktifkan. Pembelian ulang
+            dan perpanjangan belum tersedia; hubungi admin untuk memeriksa
+            aktivasi undangan.
+          </span>
+        </div>
+      )}
       {active && (
         <div className="success-box">
           <CheckCircle2 size={20} />
           <span>
-            Paket {PLANS.find((p) => p.id === active.plan)?.name} aktif.
+            Paket {plans.find((p) => p.id === active.plan)?.name} aktif
+            {sandboxEnabled ? " untuk pengujian sandbox." : "."}
             {inv.expiresAt
               ? " Berlaku sampai " + dateLabel(inv.expiresAt) + "."
               : ""}
@@ -973,54 +1091,75 @@ function Billing({
         </div>
       )}
       <div className="pricing-grid">
-        {PLANS.map((p) => (
-          <section
-            key={p.id}
-            className={`plan-card ${p.id === "assisted" ? "featured" : ""}`}
-          >
-            <p className="eyebrow">
-              {p.id === "assisted"
-                ? "DENGAN ADMIN PENDAMPING"
-                : "UNTUK KALIAN YANG KREATIF"}
-            </p>
-            <h2>{p.name}</h2>
-            <p>{p.description}</p>
-            <div className="plan-price">
-              {money(p.price)}
-              <small>/ undangan</small>
-            </div>
-            <ul>
-              {p.features.map((f) => (
-                <li key={f}>
-                  <Check size={15} />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <button
-              className="btn primary full"
-              disabled={
-                busy ||
-                readOnly ||
-                mode !== "demo" ||
-                active?.plan === p.id ||
-                active?.plan === "assisted"
-              }
-              onClick={() => run("checkout", { plan: p.id })}
+        {plans.map((p) => {
+          const upgrading =
+            mode === "supabase" &&
+            active?.plan === "mandiri" &&
+            p.id === "assisted";
+          const charge = upgrading ? p.price - active.amount : p.price;
+          return (
+            <section
+              key={p.id}
+              className={`plan-card ${p.id === "assisted" ? "featured" : ""}`}
             >
-              {active
-                ? active.plan === p.id
-                  ? "Paket aktif"
-                  : active.plan === "mandiri"
-                    ? "Tingkatkan ke bantuan admin"
-                    : "Termasuk paket aktif"
-                : mode === "demo"
-                  ? "Pilih paket"
-                  : "Segera tersedia"}
-              <ArrowRight size={16} />
-            </button>
-          </section>
-        ))}
+              <p className="eyebrow">
+                {p.id === "assisted"
+                  ? "DENGAN ADMIN PENDAMPING"
+                  : "UNTUK KALIAN YANG KREATIF"}
+              </p>
+              <h2>{p.name}</h2>
+              <p>{PLANS.find((plan) => plan.id === p.id)?.description}</p>
+              <div className="plan-price">
+                {upgrading && charge <= 0 ? "Perlu pemeriksaan" : money(charge)}
+                <small>{upgrading ? "biaya peningkatan" : "/ undangan"}</small>
+              </div>
+              {upgrading && (
+                <p className="small muted">
+                  Harga sudah dikurangi pembayaran paket Mandiri kalian. Masa
+                  berlaku tetap sampai {dateLabel(inv.expiresAt!)}.
+                </p>
+              )}
+              <ul>
+                {p.features.map((f) => (
+                  <li key={f}>
+                    <Check size={15} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                className="btn primary full"
+                disabled={
+                  busy ||
+                  readOnly ||
+                  (mode !== "demo" &&
+                    (!sandboxEnabled || unresolved || renewalUnavailable)) ||
+                  (upgrading && charge <= 0) ||
+                  active?.plan === p.id ||
+                  active?.plan === "assisted"
+                }
+                onClick={() => void checkout(p.id)}
+              >
+                {renewalUnavailable
+                  ? "Hubungi admin untuk aktivasi"
+                  : upgrading && charge <= 0
+                    ? "Peningkatan belum tersedia"
+                    : active
+                      ? active.plan === p.id
+                        ? "Paket aktif"
+                        : active.plan === "mandiri"
+                          ? "Tingkatkan ke bantuan admin"
+                          : "Termasuk paket aktif"
+                      : mode === "supabase" && unresolved
+                        ? "Periksa pesanan yang berjalan"
+                        : mode === "demo" || sandboxEnabled
+                          ? "Pilih paket"
+                          : "Segera tersedia"}
+                <ArrowRight size={16} />
+              </button>
+            </section>
+          );
+        })}
       </div>
       <section className="panel">
         <div className="panel-header">
@@ -1041,54 +1180,88 @@ function Billing({
               </tr>
             </thead>
             <tbody>
-              {inv.orders.map((o) => (
-                <tr key={o.id}>
-                  <td>
-                    <strong>{o.id.slice(0, 12)}</strong>
-                    <small className="cell-sub">{dateLabel(o.createdAt)}</small>
-                  </td>
-                  <td>{PLANS.find((p) => p.id === o.plan)?.name}</td>
-                  <td>{money(o.amount)}</td>
-                  <td>
-                    <span
-                      className={`badge ${o.status === "paid" ? "green" : "neutral"}`}
-                    >
-                      {
+              {inv.orders.map((o) => {
+                const paymentUrl = sandboxPaymentUrl(o.paymentUrl);
+                return (
+                  <tr key={o.id}>
+                    <td>
+                      <strong>{o.id.slice(0, 12)}</strong>
+                      <small className="cell-sub">
+                        {dateLabel(o.createdAt)}
+                      </small>
+                    </td>
+                    <td>{plans.find((p) => p.id === o.plan)?.name}</td>
+                    <td>{money(o.amount)}</td>
+                    <td>
+                      <span
+                        className={`badge ${o.status === "paid" ? "green" : "neutral"}`}
+                      >
                         {
-                          paid: "Lunas",
-                          pending: "Menunggu pembayaran",
-                          failed: "Gagal",
-                          expired: "Kedaluwarsa",
-                        }[o.status]
-                      }
-                    </span>
-                  </td>
-                  <td>
-                    {o.status === "pending" &&
-                      !readOnly &&
-                      (mode === "demo" ? (
-                        <button
-                          className="btn secondary small-btn"
-                          disabled={busy}
-                          onClick={() => run("demoPay", { orderId: o.id })}
-                        >
-                          Simulasikan lunas
-                        </button>
-                      ) : o.paymentUrl ? (
-                        <a
-                          href={o.paymentUrl}
-                          className="text-button"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Bayar <ExternalLink size={13} />
-                        </a>
-                      ) : (
-                        <span className="muted">Menyiapkan pembayaran</span>
-                      ))}
-                  </td>
-                </tr>
-              ))}
+                          {
+                            paid: "Lunas",
+                            pending: "Menunggu pembayaran",
+                            failed: "Gagal",
+                            expired: "Kedaluwarsa",
+                            cancelled: "Dibatalkan",
+                            refunded: "Dikembalikan",
+                            review: "Perlu pemeriksaan",
+                          }[o.status]
+                        }
+                      </span>
+                      {mode === "supabase" && o.status === "pending" && (
+                        <small className="cell-sub">
+                          {o.checkoutState === "uncertain"
+                            ? "Hasil pembuatan sesi belum pasti. Periksa status pesanan ini sebelum melanjutkan."
+                            : o.checkoutState === "creating"
+                              ? "Sesi sandbox sedang disiapkan."
+                              : "Transaksi sandbox"}
+                        </small>
+                      )}
+                    </td>
+                    <td>
+                      {o.status === "pending" &&
+                        !readOnly &&
+                        mode === "demo" && (
+                          <button
+                            className="btn secondary small-btn"
+                            disabled={busy}
+                            onClick={() => run("demoPay", { orderId: o.id })}
+                          >
+                            Simulasikan lunas
+                          </button>
+                        )}
+                      {mode === "supabase" && !readOnly && (
+                        <div className="button-group">
+                          {sandboxEnabled &&
+                            o.status === "pending" &&
+                            o.checkoutState === "ready" &&
+                            paymentUrl && (
+                              <a
+                                href={paymentUrl}
+                                className="text-button"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Buka sandbox <ExternalLink size={13} />
+                              </a>
+                            )}
+                          {["pending", "review", "paid"].includes(o.status) && (
+                            <button
+                              className="btn secondary small-btn"
+                              disabled={busy || !sandboxEnabled}
+                              onClick={() =>
+                                run("refreshPayment", { orderId: o.id })
+                              }
+                            >
+                              Periksa status
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {!inv.orders.length && (

@@ -56,6 +56,14 @@ export async function readJson(
   limit = 1_000_000,
 ): Promise<Record<string, unknown>> {
   checkOrigin(request);
+  return readJsonBody(request, limit);
+}
+
+/** Provider webhooks use signatures, not browser Origin, for authentication. */
+export async function readJsonBody(
+  request: NextRequest,
+  limit: number,
+): Promise<Record<string, unknown>> {
   if (!request.headers.get("content-type")?.includes("application/json"))
     throw new AppError(415, "Gunakan format JSON.");
   if (Number(request.headers.get("content-length")) > limit)

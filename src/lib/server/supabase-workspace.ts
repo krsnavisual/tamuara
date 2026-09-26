@@ -10,6 +10,7 @@ import {
 import { type MediaAsset, type Store, type StoredInvitation } from "./store";
 import { getSupabaseAdmin } from "./supabase-auth";
 import { hasActiveSupabaseEntitlement } from "./supabase-entitlement";
+import { createPaymentService } from "./payments/service";
 import {
   mutateWorkspaceInStore,
   outputWorkspace,
@@ -150,7 +151,10 @@ async function workspace(
 ): Promise<Workspace> {
   const rows = await loadAccessibleDocuments(user, deps);
   const store = storeFrom(rows.map((row) => row.state));
-  return { ...outputWorkspace(store, user, deps.key), mode: "supabase" };
+  return createPaymentService({ admin: deps.admin }).decorateWorkspace(user, {
+    ...outputWorkspace(store, user, deps.key),
+    mode: "supabase",
+  });
 }
 
 async function mutateWorkspace(
@@ -158,7 +162,13 @@ async function mutateWorkspace(
   input: Mutation,
   deps: AdapterDependencies,
 ): Promise<Workspace> {
-  if (input.action === "checkout" || input.action === "demoPay")
+  if (input.action === "checkout" || input.action === "refreshPayment") {
+    const payments = createPaymentService({ admin: deps.admin });
+    if (input.action === "checkout") await payments.checkout(user, input);
+    else await payments.refresh(user, input.payload?.orderId);
+    return workspace(user, deps);
+  }
+  if (input.action === "demoPay")
     throw new AppError(
       503,
       "Pembayaran produksi belum tersedia. Checkout akan dibuka setelah akun merchant terhubung.",

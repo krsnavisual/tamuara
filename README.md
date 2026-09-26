@@ -44,7 +44,11 @@ Contoh variabel tersedia di `.env.example`. Salin menjadi `.env.local` jika dipe
 
 Repository lokal mendukung satu proses Node.js dengan disk persisten. Penulisan data diantrikan dan menggunakan file pengganti atomik. Jangan menjalankan dua server yang menulis direktori data yang sama. Untuk backup lokal konsisten, hentikan server dan salin **seluruh** folder `.data` ke lokasi privat; pemulihan menggunakan salinan database, media, dan kunci yang sama. Uji pemulihan operasional sebelum memakai data pelanggan.
 
-Proyek Supabase Tamuara terhubung ke repository GitHub, dengan deploy production otomatis tetap nonaktif. Enam migrasi sudah diterapkan. Smoke test lokal dan online dengan tiga akun sintetis meluluskan Auth, isolasi, media privat, pratinjau, klaim admin, publikasi/snapshot, tautan tamu, RSVP serentak, dan moderasi ucapan. Akses publik diperiksa terhadap entitlement SQL dan pesanan lunas; kedaluwarsa paket menutup halaman publik serta media. Media dibaca melalui endpoint aplikasi; unduh Storage langsung ditutup. Penurunan peran admin mencabut akses privatnya. Pesanan lunas pada tes hanya fixture sintetis; semua data uji dibersihkan dan diverifikasi. Proyek ini dipakai sementara sebagai lingkungan uji. Lihat [panduan Supabase](supabase/README.md) untuk menjalankan ulang tes. Site URL Auth dan callback sudah sesuai `http://127.0.0.1:3001`; SMTP serta email nyata masih diperlukan. Adapter Midtrans beserta tes sudah disiapkan, tetapi checkout dan webhook belum terhubung ke transaksi database. Mode Supabase tetap menolak checkout (503) dan simulasi pembayaran. Lihat [status integrasi pembayaran](docs/INTEGRASI-PEMBAYARAN.md).
+Proyek Supabase Tamuara terhubung ke repository GitHub dengan deploy production otomatis tetap nonaktif. Tujuh migrasi sudah diterapkan lokal dan online; katalog serta environment pembayaran online belum diaktifkan. Smoke test lokal/online meluluskan Auth, isolasi pasangan, media privat, pratinjau, klaim admin, publikasi/snapshot, tautan tamu, RSVP serentak, serta moderasi ucapan. Regresi provider online setelah migrasi pembayaran juga lulus. Akses publik memeriksa entitlement SQL dan pesanan lunas; kedaluwarsa menutup halaman serta media. Unduh Storage langsung ditutup dan penurunan peran admin mencabut akses privat. Semua fixture dibersihkan dan diverifikasi. Lihat [panduan Supabase](supabase/README.md).
+
+Checkout sandbox dan pemeriksaan status sudah terhubung ke transaksi SQL; webhook tersedia di `/api/payments/midtrans/webhook`. Pembayaran tetap `disabled` secara default dan merespons 503 sampai mode `sandbox`, Server Key sandbox `SB-`, serta katalog SQL aktif tersedia. Harga dibekukan pada pesanan, riwayat pesanan dan sesi pembayaran hanya diterima pemilik, dan aktivasi/revokasi entitlement menyinkronkan SQL serta dokumen secara atomik. Pembayaran tidak menerbitkan undangan otomatis. Refund/review dapat mencabut paket bantuan yang bergantung pada pesanan dasar. Status diperiksa melalui tombol pelanggan; belum ada rekonsiliasi terjadwal. Sesi uncertain membutuhkan pemeriksaan operator dan belum mempunyai alat recovery. Production belum didukung oleh alur pembayaran ini. [Panduan sandbox](docs/PANDUAN-MIDTRANS-SANDBOX.md) dan [status integrasi](docs/INTEGRASI-PEMBAYARAN.md) menjelaskan prasyaratnya.
+
+Proyek online dipakai sementara sebagai lingkungan uji. Site URL Auth dan callback sesuai `http://127.0.0.1:3001`; domain, SMTP, email nyata, dan merchant Midtrans masih diperlukan. Tes pembayaran lokal memakai provider tiruan terhadap SQL nyata; pesanan lunas pada smoke publik adalah fixture sintetis, bukan pembayaran merchant.
 
 Adapter memakai satu dokumen JSONB per undangan dengan commit transaksional dan cek versi untuk menjaga isolasi dan mencegah data tertimpa. Tabel terstruktur sudah disiapkan untuk pengembangan berikutnya. RSVP bertrafik tinggi perlu dipindahkan ke transaksi khusus. Simpan kunci `TAMUARA_TOKEN_ENCRYPTION_KEY` bersama backup agar tautan tamu dan pratinjau tetap dapat dibaca.
 
@@ -69,9 +73,15 @@ npx.cmd playwright install chromium
 npm.cmd run test:e2e
 ```
 
-Untuk pengujian provider Supabase pada mesin lokal, jalankan `npx.cmd supabase start`, `npx.cmd supabase test db --local`, lalu `npm.cmd run test:supabase:local` di PowerShell. Enam migrasi telah lulus **90 pemeriksaan SQL**. Smoke test lokal dan online juga memeriksa publikasi ulang, isolasi draf/snapshot, token dan kuota tamu, RSVP serentak, moderasi, pencabutan paket, serta pembersihan seluruh data sintetis.
+Untuk pengujian Supabase pada mesin lokal, jalankan `npx.cmd supabase start`, `npx.cmd supabase test db --local`, lalu `npm.cmd run test:supabase:local` di PowerShell. Tujuh migrasi telah lulus **175 pemeriksaan SQL** (90 pemeriksaan sebelumnya dan 85 pembayaran). Bukti smoke lokal/online tahap sebelumnya juga meliputi publikasi ulang, isolasi draf/snapshot, token/kuota tamu, RSVP serentak, moderasi, pencabutan paket, serta pembersihan data sintetis.
 
-Pengujian backend menggunakan direktori sementara dan klien provider tiruan untuk memeriksa isolasi, konflik versi, publikasi, token, RSVP, moderasi, media, entitlement SQL, dan adapter Midtrans. **57 pemeriksaan backend/HTTP** (39 tes utama dan 18 subtes) lulus. Pengujian browser mencakup alur pasangan–tamu/admin, CSV, serta desktop/ponsel; 5 tes Chromium lulus.
+```powershell
+npm.cmd run test:payments:local
+```
+
+Smoke pembayaran ini hanya menerima API `http://127.0.0.1:54321`. Provider Midtrans diganti respons sintetis; RPC checkout, deduplikasi, status, dan entitlement memakai SQL lokal nyata. Tes mengaktifkan sementara katalog lokal, lalu memulihkan seluruh baris katalog dan menghapus/verifikasi akun serta data sintetis. Tes tersebut sudah lulus, tetapi tidak membuktikan integrasi akun merchant.
+
+Pengujian backend menggunakan direktori sementara dan klien provider tiruan untuk memeriksa isolasi, konflik versi, publikasi, token, RSVP, moderasi, media, entitlement SQL, adapter Midtrans, dan service pembayaran. **70 pemeriksaan TypeScript** (52 tes utama dan 18 subtes), typecheck, lint, dan build lulus. Pengujian browser memverifikasi **9 tes Chromium** untuk alur pasangan–tamu/admin, CSV, desktop/ponsel, serta pembayaran termasuk masa berlaku, revokasi, dan kredit peningkatan.
 
 Playwright menjalankan server demo lokal terpisah pada port 3002 (dapat diubah dengan `TAMUARA_E2E_PORT`), memakai `.data/playwright` dan `.next-e2e`. Tes tidak memakai ulang server port 3001 yang mungkin sedang terhubung ke Supabase. Browser tests membuat akun sintetis pada data demo lokal; tidak mengirim email atau WhatsApp. Screenshot berada di `test-results/` dan tidak masuk Git. Safari/iOS fisik, email nyata, dan pembayaran pelanggan belum diuji end-to-end.
 
@@ -80,7 +90,7 @@ Playwright menjalankan server demo lokal terpisah pada port 3002 (dapat diubah d
 ```text
 src/app/(marketing)/        Website pemasaran
 src/app/app/, admin/        Dashboard
-src/app/api/                Auth, workspace, public, preview, media
+src/app/api/                Auth, workspace, public, preview, media, webhook pembayaran
 src/components/app/         Editor dan pengelolaan
 src/components/invitation/  Renderer tiga tema
 src/lib/server/             Domain lokal, adapter Supabase, validasi, token
@@ -95,6 +105,7 @@ docs/                      Rencana, backlog, dan status implementasi
 
 - [Rencana pengembangan](docs/RENCANA-PENGEMBANGAN.md), [backlog](docs/BACKLOG-MVP.md), dan [status implementasi](docs/STATUS-IMPLEMENTASI.md).
 - [Panduan konfigurasi email akun](docs/PANDUAN-EMAIL.md): domain pengirim, DNS, SMTP Supabase, callback, dan pengujian email nyata.
+- [Panduan Midtrans Sandbox](docs/PANDUAN-MIDTRANS-SANDBOX.md): akun/kunci server, webhook HTTPS, katalog paket, simulator, dan matriks pengujian merchant.
 - Logo pilihan pengguna: `brand/tamuara-logo.png`, disalin tanpa perubahan ke `public/brand/`.
 - Foto contoh: [foto pernikahan 1](https://images.unsplash.com/photo-1519741497674-611481863552) dan [foto pernikahan 2](https://images.unsplash.com/photo-1511285560929-80b456fea0bc), Unsplash. Ganti dengan materi pasangan sebelum penggunaan nyata.
 - Font Google Fonts mempunyai fallback lokal. Jaringan terputus tidak menghalangi pengisian atau pembacaan konten.

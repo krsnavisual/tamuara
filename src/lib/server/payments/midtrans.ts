@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-// Dormant provider adapter: no routes import this module and it grants no entitlement.
+// Provider transport only. Database orchestration grants entitlements after verification.
 export type MidtransEnvironment = "sandbox" | "production";
 export type MidtransOrderSnapshot = Readonly<{
   orderId: string;

@@ -4,7 +4,9 @@
 
 Aplikasi pada port 3001 saat ini memilih `TAMUARA_BACKEND=supabase` di `.env.local` dan memakai proyek uji sementara. Jika backend Supabase tidak dipilih saat pengembangan, mode lokal menyimpan akun, undangan, sesi, RSVP, bantuan admin, dan transaksi simulasi di `.data/tamuara.json`; gambar berada di `.data/media`. Salinan token terenkripsi memakai `.data/encryption.key`. Simpan database, media, dan kunci bersama saat membuat backup lokal. Jangan commit atau membagikan folder `.data`.
 
-Migrasi dan adapter Supabase untuk Auth, undangan, publik, media, dan klaim bantuan admin telah ditulis. Enam migrasi sudah diterapkan ke proyek Tamuara `fegugfhyahwdcfydapuf`. Smoke test lokal dan online untuk Auth, draf/audit, isolasi pasangan, media privat/WebP melalui aplikasi, rotasi token pratinjau, antrean/klaim admin dengan entitlement paket bantuan, serta pencabutan akses setelah peran admin diturunkan telah lulus. Alur review/publikasi, snapshot terbit ulang, RSVP bersamaan, moderasi ucapan, token tamu, dan penutupan akses saat entitlement SQL kedaluwarsa juga lulus pada kedua lingkungan. Unduh langsung dari Storage ditolak. Data sintetis termasuk publikasi, keanggotaan, pesanan/entitlement, metadata media, objek Storage, dan akun Auth sudah dibersihkan dan diverifikasi. Proyek ini dipakai sementara sebagai lingkungan uji; deploy production otomatis tetap nonaktif. Akun merchant belum tersedia. Modul verifikasi Midtrans dan 12 tes unit sudah disiapkan, tetapi endpoint checkout/webhook belum dibuat dan tidak ada transaksi merchant nyata. Mode Supabase menolak checkout dengan 503 dan tidak menyediakan pembayaran simulasi. Pesanan berstatus lunas dalam smoke test hanya fixture sintetis yang dibuat langsung untuk menguji otorisasi, bukan pembayaran nyata.
+Tujuh migrasi sudah diterapkan lokal dan ke proyek Tamuara `fegugfhyahwdcfydapuf`. Katalog serta environment pembayaran online belum diaktifkan. Smoke lokal/online meluluskan Auth, draf/audit, isolasi pasangan, media privat/WebP, pratinjau, klaim/admin, publikasi/snapshot, token/kuota/RSVP/moderasi, serta pencabutan akses admin dan entitlement. Regresi provider online setelah migrasi pembayaran juga lulus. Unduh Storage langsung ditolak. Semua fixture dibersihkan serta diverifikasi. Proyek online dipakai sementara sebagai lingkungan uji; deploy production otomatis tetap nonaktif. RPC checkout pembayaran memakai provider sintetis hanya diuji pada SQL lokal, belum pada merchant atau sebagai tes checkout online.
+
+Checkout dan `refreshPayment` pada workspace memakai service sandbox; webhook berada di `/api/payments/midtrans/webhook`. Pembayaran default `disabled`, menolak konfigurasi tidak lengkap dengan 503, dan tidak mendukung live. Mode `sandbox` memerlukan Server Key `SB-` serta katalog SQL yang diaktifkan operator setelah harga/ketentuan ditinjau. Tes service terhadap SQL lokal memakai respons provider tiruan dan sudah lulus; belum ada transaksi merchant atau email nyata. Smoke publik memakai pesanan sintetis langsung untuk menguji otorisasi. Lihat [panduan sandbox](../docs/PANDUAN-MIDTRANS-SANDBOX.md).
 
 ## Menjalankan aplikasi lokal
 
@@ -23,9 +25,12 @@ Migrasi dan adapter Supabase untuk Auth, undangan, publik, media, dan klaim bant
 npx.cmd supabase start
 npx.cmd supabase test db --local
 npm.cmd run test:supabase:local
+npm.cmd run test:payments:local
 ```
 
-`npx.cmd supabase start` menerapkan migrasi pada database lokal saat pertama kali dijalankan. Tiga berkas pgTAP untuk enam migrasi telah lulus dengan 90 pemeriksaan. `test:supabase:local` menguji Auth, profil, draf, audit, isolasi pasangan, media privat, pratinjau, antrean/klaim bantuan admin, pencabutan akses admin, serta alur publikasi/tamu melalui route aplikasi, lalu membersihkan data sintetisnya; perintah ini menolak URL API selain `http://127.0.0.1:54321`. Jika perlu mengulang migrasi dari awal, `npx.cmd supabase db reset --local` **menghapus data di database Supabase lokal**. Jangan gunakan perintah reset pada proyek online. Alamat API, kunci publik, kunci rahasia, dan Mailpit lokal tersedia melalui `npx.cmd supabase status`. Salin hanya nilai yang diperlukan ke `.env.local`; kunci rahasia tidak boleh diberi awalan `NEXT_PUBLIC_`.
+`npx.cmd supabase start` menerapkan migrasi pada database lokal saat pertama kali dijalankan. Empat berkas pgTAP untuk tujuh migrasi telah lulus dengan **175 pemeriksaan** (90 sebelumnya + 85 pembayaran). `test:supabase:local` menguji Auth, data, media, bantuan admin, dan publikasi/tamu melalui route aplikasi lalu membersihkan fixture. `test:payments:local` memakai SQL nyata dengan provider Midtrans sintetis untuk checkout concurrent sekali, harga server, redirect privat, deduplikasi, validasi nominal/signature, aktivasi tanpa publikasi, serta revokasi refund/review/reversal. Tes memulihkan katalog dan memverifikasi pembersihan fixture. Kedua perintah menolak API selain `http://127.0.0.1:54321` dan tidak membuktikan merchant siap.
+
+Jika perlu mengulang migrasi dari awal, `npx.cmd supabase db reset --local` **menghapus data di database Supabase lokal**. Jangan gunakan perintah reset pada proyek online. Alamat API, kunci publik, kunci rahasia, dan Mailpit lokal tersedia melalui `npx.cmd supabase status`. Salin hanya nilai yang diperlukan ke `.env.local`; kunci rahasia tidak boleh diberi awalan `NEXT_PUBLIC_`.
 
 ## Smoke test proyek online sementara
 
@@ -49,6 +54,10 @@ Migrasi tambahan `202609250002_harden_access.sql` memperketat hak baca token dan
 
 `202609260002_assistance_role_access.sql` mensyaratkan peran profil `admin` yang masih aktif untuk hak `assigned_admin` pada undangan; keanggotaan `editor` tetap berlaku sesuai izinnya. `202609260003_private_media_proxy_only.sql` menutup unduh langsung dari Storage bagi pengguna terautentikasi. Semua media undangan dilayani melalui `/api/media/[id]`, yang memeriksa izin terkini pada setiap request dan mengirim respons privat tanpa cache.
 
+`202609260004_sandbox_payment_checkout.sql` menambah checkout session privat, reservasi idempoten, snapshot harga/fitur, kredit peningkatan dari jumlah paket dasar yang benar-benar dibayar, pencatatan status terverifikasi, dan sinkronisasi entitlement SQL/dokumen dalam transaksi. Refund/review paket dasar dapat mencabut peningkatan yang bergantung padanya. Status terminal membatasi pemulihan dari event terlambat; pembayaran tidak menerbitkan undangan. Semua RPC pembayaran hanya untuk service role setelah otorisasi/verifikasi di API server. Pemilik menerima riwayat pesanan serta tautan sesi melalui aplikasi; admin yang ditugaskan tidak menerima keduanya.
+
+Rekonsiliasi tersedia melalui tombol **Periksa status**, belum berupa job terjadwal. Jika respons sesi hilang atau proses berhenti setelah reservasi, checkout dapat uncertain dan tetap memblokir percobaan baru: status404 tidak membuktikan sesi tidak pernah dibuat. Pemeriksaan operator diperlukan; belum ada alat recovery/reissue.
+
 Adapter server memanggil `public.commit_invitation_document(p_invitation_id uuid, p_expected_version integer, p_state jsonb, p_actor_id uuid, p_action text)` dan menerima versi dokumen baru sebagai integer. Versi `0` membuat undangan draf secara atomik. Versi berikutnya harus sama dengan `invitation_documents.version`, sehingga dua penulis tidak saling menimpa. RPC menyinkronkan slug, status, masa berlaku, admin yang ditugaskan, membuat snapshot saat terbit/terbit ulang, dan mencatat audit perubahan rekening tanpa nilai rekening. `state.version` tetap versi editor, sedangkan `invitation_documents.version` naik pada **setiap** perubahan termasuk RSVP. RPC ini hanya dapat dipanggil service role dan tetap memerlukan otorisasi pengguna di API aplikasi sebelum dipanggil.
 
 Adapter memeriksa hak paket dokumen terhadap `entitlements` dan pesanan SQL lunas sebelum melayani publikasi, RSVP/ucapan, atau media publik. ID entitlement, undangan, pemilik, paket, dan pesanan harus cocok; masa berlaku dokumen dan SQL harus masih aktif. Pemeriksaan diulang saat retry CAS agar hak yang kedaluwarsa tidak dipakai kembali. Snapshot entitlement dalam JSONB tidak dapat mengaktifkan layanan sendiri. Mode lokal tetap memakai hak paket simulasi di repository lokal.
@@ -70,21 +79,22 @@ Bucket `tamuara-private` tidak publik. Path media wajib diawali UUID undangan. K
 3. Isi `.env.local` dari `.env.example`, set `TAMUARA_BACKEND=supabase`, dan buat kunci token stabil 32 byte: `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Simpan kunci ini di secret manager dan backup aman. Jangan memakai kunci service role di browser.
 4. Site URL Auth dan kedua redirect callback sudah diterapkan untuk alamat pengembangan. Sebelum melayani pelanggan, atur domain produksi, SMTP dan template email, lalu uji daftar, konfirmasi, login, keluar, dan pemulihan kata sandi dengan akun nyata.
 5. Alur dua pasangan, media privat, rotasi pratinjau, klaim admin, review/publikasi, konflik RSVP, snapshot terbit, serta kedaluwarsa hak paket sintetis sudah diuji pada provider nyata. Lanjutkan pilot dan uji beban sesuai kebutuhan volume.
-6. Hubungkan endpoint checkout sandbox dan webhook Midtrans dengan modul server yang sudah disiapkan mengikuti [rencana integrasi pembayaran](../docs/INTEGRASI-PEMBAYARAN.md). Nominal berasal dari snapshot pesanan server. Modul menguji signature notifikasi dan pencocokan status provider terautentikasi, ID, serta nominal; integrasi transaksi, deduplikasi, dan rekonsiliasi masih diperlukan. Redirect browser tidak mengaktifkan paket. Pembayaran tidak menerbitkan undangan otomatis.
-7. Uji restore database **dan** media pada staging. Setelah lulus, aktifkan merchant live, domain, logging tanpa token/PII, dan konfigurasi produksi.
+6. Siapkan akun merchant sandbox, kunci privat, webhook HTTPS, dan katalog uji mengikuti [panduan sandbox](../docs/PANDUAN-MIDTRANS-SANDBOX.md). Checkout/webhook telah terhubung ke SQL, tetapi transaksi merchant belum diuji. Uji pending, sukses/gagal, duplikat/urutan event, timeout, refund/reversal, dan pemulihan operator. Redirect browser tidak mengaktifkan paket atau menerbitkan undangan.
+7. Siapkan rekonsiliasi terjadwal dan SOP review/refund, lalu uji restore database **dan** media pada staging. Pembayaran production memerlukan tahap aktivasi tersendiri; mode live belum didukung oleh service saat ini.
 
 ## Environment yang akan digunakan adapter produksi
 
-| Variabel | Kegunaan | Status |
-| --- | --- | --- |
-| `TAMUARA_BACKEND` | `local` atau `supabase` | Wajib `supabase` untuk adapter baru |
-| `NEXT_PUBLIC_SUPABASE_URL` | URL proyek | Dipakai Auth/server |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Kunci publishable proyek | Dipakai Auth; lebih diutamakan dari kunci anon legacy |
-| `SUPABASE_SECRET_KEY` | Kunci server untuk operasi terkontrol | Dipakai server; rahasia, lebih diutamakan dari service role legacy |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Kunci anon legacy | Fallback saat publishable key kosong |
-| `SUPABASE_SERVICE_ROLE_KEY` | Kunci service role legacy | Fallback saat secret key kosong; rahasia |
-| `TAMUARA_TOKEN_ENCRYPTION_KEY` | Kunci enkripsi token produksi | Dipakai server; 64 karakter heksadesimal |
-| `MIDTRANS_SERVER_KEY` | Akses API dan verifikasi pembayaran | Modul server disiapkan; belum ada merchant/endpoint aktif; rahasia server |
-| `MIDTRANS_IS_PRODUCTION` | Pemilihan sandbox/live | Modul server disiapkan; mulai dari `false` |
+| Variabel                               | Kegunaan                              | Status                                                                                      |
+| -------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `TAMUARA_BACKEND`                      | `local` atau `supabase`               | Wajib `supabase` untuk adapter baru                                                         |
+| `NEXT_PUBLIC_SUPABASE_URL`             | URL proyek                            | Dipakai Auth/server                                                                         |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Kunci publishable proyek              | Dipakai Auth; lebih diutamakan dari kunci anon legacy                                       |
+| `SUPABASE_SECRET_KEY`                  | Kunci server untuk operasi terkontrol | Dipakai server; rahasia, lebih diutamakan dari service role legacy                          |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Kunci anon legacy                     | Fallback saat publishable key kosong                                                        |
+| `SUPABASE_SERVICE_ROLE_KEY`            | Kunci service role legacy             | Fallback saat secret key kosong; rahasia                                                    |
+| `TAMUARA_TOKEN_ENCRYPTION_KEY`         | Kunci enkripsi token produksi         | Dipakai server; 64 karakter heksadesimal                                                    |
+| `TAMUARA_PAYMENT_MODE`                 | Gerbang checkout/webhook              | Default `disabled`; `sandbox` memerlukan konfigurasi dan katalog aktif; live belum didukung |
+| `MIDTRANS_SERVER_KEY`                  | Akses API dan verifikasi pembayaran   | Sandbox `SB-` pada server saja; akun merchant belum tersedia                                |
+| `MIDTRANS_IS_PRODUCTION`               | Pencegahan endpoint live              | Wajib `false` pada alur sandbox saat ini                                                    |
 
 Dokumentasi acuan: [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys), [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Storage access control](https://supabase.com/docs/guides/storage/security/access-control), [Midtrans webhooks](https://docs.midtrans.com/docs/https-notification-webhooks). Migrasi dan alur dasar sudah diuji pada instance Supabase; fitur pelanggan lainnya masih memerlukan pengujian sebelum siap produksi.

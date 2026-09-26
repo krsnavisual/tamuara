@@ -76,10 +76,18 @@ export interface Order {
   id: string;
   plan: PlanId;
   amount: number;
-  status: "pending" | "paid" | "failed" | "expired";
+  status:
+    | "pending"
+    | "paid"
+    | "failed"
+    | "expired"
+    | "cancelled"
+    | "refunded"
+    | "review";
   createdAt: string;
   paidAt?: string;
   paymentUrl?: string;
+  checkoutState?: "creating" | "ready" | "uncertain";
 }
 export type ServiceStatus =
   | "none"
@@ -131,6 +139,16 @@ export interface Workspace {
   user: User;
   invitations: Invitation[];
   mode: "demo" | "supabase";
+  payments?: {
+    enabled: boolean;
+    environment: "sandbox";
+    plans: {
+      id: PlanId;
+      name: string;
+      price: number;
+      features: string[];
+    }[];
+  };
 }
 export interface PublicInvitation {
   slug: string;
