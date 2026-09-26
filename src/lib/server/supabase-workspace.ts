@@ -9,6 +9,7 @@ import {
 } from "./public";
 import { type MediaAsset, type Store, type StoredInvitation } from "./store";
 import { getSupabaseAdmin } from "./supabase-auth";
+import { hasActiveSupabaseEntitlement } from "./supabase-entitlement";
 import {
   mutateWorkspaceInStore,
   outputWorkspace,
@@ -169,6 +170,20 @@ async function mutateWorkspace(
     const invitation = requireInvitation(store, input.invitationId, user);
     store.media = await loadInvitationMedia(invitation.id, deps);
   }
+  if (input.action === "publish") {
+    const invitation = requireInvitation(store, input.invitationId, user);
+    assert(
+      invitation.ownerId === user.id,
+      403,
+      "Tindakan ini hanya dapat dilakukan pemilik undangan.",
+    );
+    assert(
+      await hasActiveSupabaseEntitlement(deps.admin, invitation),
+      402,
+      "Aktifkan paket undangan sebelum menerbitkan.",
+      "PAYMENT_REQUIRED",
+    );
+  }
   mutateWorkspaceInStore(store, user, deps.key, input);
   const changed =
     input.action === "create"
@@ -216,6 +231,11 @@ async function publicInvitation(
   guestToken?: string,
 ): Promise<PublicInvitation> {
   const row = await documentBySlug(slug, deps);
+  assert(
+    await hasActiveSupabaseEntitlement(deps.admin, row.state),
+    404,
+    "Undangan belum terbit atau sudah tidak aktif.",
+  );
   return {
     ...publicInvitationFromStore(storeFrom([row.state]), slug, guestToken),
     mode: "supabase",
@@ -251,6 +271,11 @@ async function mutatePublicInvitation(
 ): Promise<PublicInvitation> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const row = await documentBySlug(slug, deps);
+    assert(
+      await hasActiveSupabaseEntitlement(deps.admin, row.state),
+      404,
+      "Undangan belum terbit atau sudah tidak aktif.",
+    );
     const store = storeFrom([structuredClone(row.state)]);
     const output = mutatePublicInvitationInStore(store, slug, input);
     if (JSON.stringify(row.state) === JSON.stringify(store.invitations[0]))

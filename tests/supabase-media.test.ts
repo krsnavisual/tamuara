@@ -49,7 +49,8 @@ function fixture() {
     content: { coverUrl: url, gallery: [] },
     published: undefined as
       undefined | { content: { coverUrl: string; gallery: string[] } },
-    entitlement: undefined as undefined | { expiresAt: string },
+    entitlement: undefined as
+      undefined | { orderId: string; plan: "mandiri"; expiresAt: string },
     assignedAdminId: undefined as undefined | string,
   };
   const invitation = { id: invitationId, owner_id: ownerId, status: "draft" };
@@ -58,6 +59,7 @@ function fixture() {
     invitation_documents: [{ invitation_id: invitationId, state }],
     invitation_members: [],
     media_assets: [],
+    entitlements: [],
   };
   const objects = new Map<string, Uint8Array>();
   const removed: string[] = [];
@@ -239,14 +241,48 @@ test("public images require an active publication that references the asset", as
     content: { coverUrl: `/api/media/${assetId}`, gallery: [] },
   };
   data.state.entitlement = {
+    orderId: "66666666-6666-4666-8666-666666666666",
+    plan: "mandiri",
     expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
   };
+  const authority = {
+    invitation_id: invitationId,
+    order_id: data.state.entitlement.orderId,
+    expires_at: data.state.entitlement.expiresAt,
+    orders: {
+      id: data.state.entitlement.orderId,
+      invitation_id: invitationId,
+      owner_id: ownerId,
+      plan_id: "mandiri",
+      status: "paid",
+      entitlement_expires_at: data.state.entitlement.expiresAt,
+    },
+    invitations: { id: invitationId, owner_id: ownerId },
+  };
+  data.rows.entitlements.push(authority);
   const anonymous = data.adapter(undefined);
   assert.equal((await anonymous.read(assetId, request)).mime, "image/webp");
   data.state.published.content.coverUrl = "/images/other.jpg";
   await assert.rejects(anonymous.read(assetId, request), isStatus(404));
   data.state.published.content.coverUrl = `/api/media/${assetId}`;
+  authority.orders.status = "canceled";
+  await assert.rejects(anonymous.read(assetId, request), isStatus(404));
+  // Private owner and current preview access stay available after revocation.
+  assert.equal(
+    (await data.adapter(owner).read(assetId, request)).mime,
+    "image/webp",
+  );
+  assert.equal(
+    (await anonymous.read(assetId, request, previewToken)).mime,
+    "image/webp",
+  );
+  authority.orders.status = "paid";
+  authority.expires_at = new Date(Date.now() - 1_000).toISOString();
+  await assert.rejects(anonymous.read(assetId, request), isStatus(404));
+  authority.expires_at = data.state.entitlement.expiresAt;
   data.state.entitlement.expiresAt = new Date(Date.now() - 1_000).toISOString();
+  await assert.rejects(anonymous.read(assetId, request), isStatus(404));
+  data.rows.entitlements.length = 0;
   await assert.rejects(anonymous.read(assetId, request), isStatus(404));
 });
 

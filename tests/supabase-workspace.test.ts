@@ -37,9 +37,11 @@ function fixture() {
     invitation_members: [],
     invitation_documents: [],
     media_assets: [],
+    entitlements: [],
   };
   const commits: Row[] = [];
   let conflictOnce = false;
+  let onConflict: (() => void) | undefined;
 
   function from(table: string) {
     const filters: Array<(row: Row) => boolean> = [];
@@ -86,6 +88,8 @@ function fixture() {
       );
       if (conflictOnce) {
         conflictOnce = false;
+        onConflict?.();
+        onConflict = undefined;
         return {
           data: null,
           error: { code: "P0001", message: "INVITATION_VERSION_CONFLICT" },
@@ -129,8 +133,27 @@ function fixture() {
     adapter,
     tables,
     commits,
-    conflictNext() {
+    conflictNext(callback?: () => void) {
       conflictOnce = true;
+      onConflict = callback;
+    },
+    activateEntitlement() {
+      const state = tables.invitation_documents[0].state as StoredInvitation;
+      assert.ok(state.entitlement);
+      tables.entitlements.push({
+        invitation_id: state.id,
+        order_id: state.entitlement.orderId,
+        expires_at: state.entitlement.expiresAt,
+        orders: {
+          id: state.entitlement.orderId,
+          invitation_id: state.id,
+          owner_id: state.ownerId,
+          plan_id: state.entitlement.plan,
+          status: "paid",
+          entitlement_expires_at: state.entitlement.expiresAt,
+        },
+        invitations: { id: state.id, owner_id: state.ownerId },
+      });
     },
     state(): StoredInvitation {
       return tables.invitation_documents[0].state as StoredInvitation;
@@ -372,6 +395,7 @@ test("Supabase public adapter scopes guest access and retries an RSVP conflict",
   const event = state.content.events[0];
   event.date = "2030-12-12";
   event.location = "Bogor";
+  event.address = "Jalan Pernikahan 1, Bogor";
   state.content.rsvpDeadline = "2030-12-10";
   state.guests.push(
     makeStoredGuest(
@@ -401,6 +425,7 @@ test("Supabase public adapter scopes guest access and retries an RSVP conflict",
   };
   state.status = "published";
   data.tables.invitations[0].status = "published";
+  data.activateEntitlement();
   const token = (await data.adapter.getWorkspace(ownerA)).invitations[0]
     .guests[0].token;
 
@@ -441,4 +466,57 @@ test("Supabase public adapter scopes guest access and retries an RSVP conflict",
   });
   assert.equal(data.commits.length, commitsAfterWish);
   assert.equal(data.state().wishes.length, 1);
+
+  // SQL expiration must revoke access even when the JSON snapshot stays active.
+  const authority = data.tables.entitlements[0];
+  authority.expires_at = "2000-01-01T00:00:00.000Z";
+  await assert.rejects(
+    data.adapter.getPublicInvitation(state.slug, token),
+    hasStatus(404),
+  );
+  await assert.rejects(
+    data.adapter.mutatePublicInvitation(state.slug, {
+      action: "wish",
+      guestToken: token,
+      message: "Tidak boleh tersimpan setelah paket dicabut.",
+    }),
+    hasStatus(404),
+  );
+  await assert.rejects(
+    data.adapter.mutateWorkspace(ownerA, {
+      action: "publish",
+      invitationId: state.id,
+      version: data.state().version,
+    }),
+    hasStatus(402),
+  );
+  assert.equal(data.commits.length, commitsAfterWish);
+
+  authority.expires_at = state.entitlement.expiresAt;
+  await data.adapter.mutateWorkspace(ownerA, {
+    action: "publish",
+    invitationId: state.id,
+    version: data.state().version,
+  });
+  const commitsBeforeRetry = data.commits.length;
+  data.conflictNext(() => {
+    data.tables.entitlements.length = 0;
+  });
+  await assert.rejects(
+    data.adapter.mutatePublicInvitation(state.slug, {
+      action: "rsvp",
+      guestToken: token,
+      eventId: event.id,
+      status: "declined",
+      count: 0,
+    }),
+    hasStatus(404),
+  );
+  // The first CAS failed; the second attempt must re-check payment authority.
+  assert.equal(data.commits.length, commitsBeforeRetry + 1);
+  assert.equal(data.state().rsvps[0].status, "attending");
+  await assert.rejects(
+    data.adapter.getPublicInvitation(state.slug),
+    hasStatus(404),
+  );
 });

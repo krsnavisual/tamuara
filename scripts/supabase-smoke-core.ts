@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import sharp from "sharp";
 import type { Invitation, User, Workspace } from "../src/lib/types";
+import { runPublicFlowSmoke } from "./supabase-public-smoke";
 
 export type SmokeCredentials = {
   url: string;
@@ -431,13 +432,12 @@ export async function runSupabaseSmoke(
       request("/api/workspace", "GET", undefined, adminCookies),
     );
     assert.equal(beforeClaim.status, 200);
-    assert.deepEqual(
-      ((await beforeClaim.json()) as Workspace).invitations,
-      [],
-    );
+    assert.deepEqual(((await beforeClaim.json()) as Workspace).invitations, []);
 
     step = "prepare synthetic paid assisted entitlement";
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000).toISOString();
+    const expiresAt = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1_000,
+    ).toISOString();
     const order = await admin
       .from("orders")
       .insert({
@@ -582,14 +582,19 @@ export async function runSupabaseSmoke(
         adminCookies,
       ),
     );
-    assert.equal(secondClaim.status, 409, "Already claimed request was accepted");
+    assert.equal(
+      secondClaim.status,
+      409,
+      "Already claimed request was accepted",
+    );
     const emptyQueue = await assistanceGet(
       request("/api/admin/assistance", "GET", undefined, adminCookies),
     );
     assert.equal(emptyQueue.status, 200);
     assert.deepEqual((await emptyQueue.json()).requests, []);
 
-    step = "verify assigned admin can progress service and owner cannot reset it";
+    step =
+      "verify assigned admin can progress service and owner cannot reset it";
     const assignedWorkspace = await workspaceGet(
       request("/api/workspace", "GET", undefined, adminCookies),
     );
@@ -610,7 +615,11 @@ export async function runSupabaseSmoke(
         adminCookies,
       ),
     );
-    assert.equal(progress.status, 200, "Assigned admin could not progress service");
+    assert.equal(
+      progress.status,
+      200,
+      "Assigned admin could not progress service",
+    );
     const repeatRequest = await workspacePost(
       request(
         "/api/workspace",
@@ -623,7 +632,23 @@ export async function runSupabaseSmoke(
         ownerACookies,
       ),
     );
-    assert.equal(repeatRequest.status, 409, "Owner reset in-progress assistance");
+    assert.equal(
+      repeatRequest.status,
+      409,
+      "Owner reset in-progress assistance",
+    );
+
+    step =
+      "verify publication, snapshot isolation, guest lifecycle and package revocation";
+    await runPublicFlowSmoke({
+      admin,
+      invitationId,
+      ownerCookies: ownerACookies,
+      adminCookies,
+      otherOwnerCookies: ownerBCookies,
+      mediaUrl: mediaUrl.url,
+      mediaId,
+    });
 
     step = "verify media proxy and direct Storage isolation after admin claim";
     const directAdmin = createClient(url, publishableKey, {
@@ -647,8 +672,15 @@ export async function runSupabaseSmoke(
     assert.equal(assignedMediaViaApp.status, 200);
     const directMedia = await directAdmin.storage
       .from(mediaBucket)
-      .download(mediaAsset.data.object_path, { cacheNonce: randomUUID() }, { cache: "no-store" });
-    assert.ok(directMedia.error, "Direct Storage download bypassed app media proxy");
+      .download(
+        mediaAsset.data.object_path,
+        { cacheNonce: randomUUID() },
+        { cache: "no-store" },
+      );
+    assert.ok(
+      directMedia.error,
+      "Direct Storage download bypassed app media proxy",
+    );
 
     step = "verify demotion revokes app and direct Supabase access";
     const demoted = await admin
@@ -664,7 +696,11 @@ export async function runSupabaseSmoke(
     assert.deepEqual(deniedRows.data, []);
     const deniedMedia = await directAdmin.storage
       .from(mediaBucket)
-      .download(mediaAsset.data.object_path, { cacheNonce: randomUUID() }, { cache: "no-store" });
+      .download(
+        mediaAsset.data.object_path,
+        { cacheNonce: randomUUID() },
+        { cache: "no-store" },
+      );
     assert.ok(deniedMedia.error, "Demoted admin still reads private media");
     const deniedMediaViaApp = await mediaGet(
       request(mediaUrl.url, "GET", undefined, adminCookies),
@@ -758,7 +794,11 @@ export async function runSupabaseSmoke(
       }
     }
     if (!storageCleanupFailed && ownedIds.size) {
-      for (const table of ["entitlements", "payment_events", "orders"] as const) {
+      for (const table of [
+        "entitlements",
+        "payment_events",
+        "orders",
+      ] as const) {
         try {
           const deleted = await admin
             .from(table)
@@ -823,7 +863,13 @@ export async function runSupabaseSmoke(
       }
     }
     if (ownedIds.size) {
-      for (const table of ["entitlements", "payment_events", "orders"] as const) {
+      for (const table of [
+        "invitation_publications",
+        "invitation_members",
+        "entitlements",
+        "payment_events",
+        "orders",
+      ] as const) {
         try {
           const remaining = await admin
             .from(table)
@@ -908,7 +954,7 @@ export async function runSupabaseSmoke(
     process.exitCode = 1;
   } else {
     console.log(
-      `${target} Supabase smoke passed: Auth, profile, draft, audit, isolation, private media, preview rotation, paid assistance queue and claim; synthetic data removed.`,
+      `${target} Supabase smoke passed: Auth, isolation, private media, preview rotation, admin claim, publication snapshots, scoped guest RSVP/wishes and revocation; synthetic data removed.`,
     );
   }
 }

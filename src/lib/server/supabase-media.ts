@@ -7,6 +7,7 @@ import type { StoredInvitation } from "./store";
 import { hashToken } from "./crypto";
 import { AppError, assert } from "./errors";
 import { getSupabaseAdmin, getSupabaseUser } from "./supabase-auth";
+import { hasActiveSupabaseEntitlement } from "./supabase-entitlement";
 
 const BUCKET = "tamuara-private";
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
@@ -214,7 +215,8 @@ export function createSupabaseMediaAdapter({
       const url = `/api/media/${id}`;
       let allowed =
         activePublication(invitation, state) &&
-        referenced(state.published?.content, url);
+        referenced(state.published?.content, url) &&
+        (await hasActiveSupabaseEntitlement(admin, state));
 
       if (
         !allowed &&
