@@ -26,6 +26,7 @@ import type {
   PublicInvitation,
 } from "@/lib/types";
 import { THEMES } from "@/lib/catalog";
+import { IMAGE_UPLOAD_HINT, imageUploadError } from "@/lib/media-upload";
 import type { RunMutation } from "./dashboard";
 import InvitationView from "@/components/invitation/InvitationView";
 
@@ -83,11 +84,19 @@ export function InvitationEditor({
   }
   async function upload(files: FileList | null, target: "cover" | "gallery") {
     if (!files?.length) return;
-    setUploading(true);
     setUploadError("");
+    const selected = Array.from(files);
+    for (const file of selected) {
+      const validationError = imageUploadError(file);
+      if (validationError) {
+        setUploadError(`${file.name}: ${validationError}`);
+        return;
+      }
+    }
+    setUploading(true);
     const urls: string[] = [];
     try {
-      for (const file of Array.from(files)) {
+      for (const file of selected) {
         const fd = new FormData();
         fd.set("file", file);
         fd.set("invitationId", inv.id);
@@ -562,9 +571,7 @@ export function InvitationEditor({
                     />
                   </label>
                 </div>
-                <small className="muted">
-                  JPG, PNG, atau WebP. Foto dioptimalkan saat unggah.
-                </small>
+                <small className="muted">{IMAGE_UPLOAD_HINT}</small>
                 <div className="section-heading spaced-field">
                   <h3>Galeri foto</h3>
                   <span className="muted small">

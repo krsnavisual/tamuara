@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import sharp from "sharp";
+import { imageUploadError } from "../media-upload";
 import type { InvitationContent, User } from "../types";
 import type { StoredInvitation } from "./store";
 import { hashToken } from "./crypto";
@@ -10,7 +11,6 @@ import { getSupabaseAdmin, getSupabaseUser } from "./supabase-auth";
 import { hasActiveSupabaseEntitlement } from "./supabase-entitlement";
 
 const BUCKET = "tamuara-private";
-const MAX_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_ASSETS_PER_INVITATION = 60;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
@@ -101,16 +101,8 @@ function activePublication(invitation: InvitationRow, state: StoredInvitation) {
 }
 
 async function optimizeImage(file: File) {
-  assert(
-    file.size > 0 && file.size <= MAX_INPUT_BYTES,
-    400,
-    "Ukuran gambar maksimal 8 MB.",
-  );
-  assert(
-    ["image/jpeg", "image/png", "image/webp"].includes(file.type),
-    400,
-    "Gunakan gambar JPG, PNG, atau WebP.",
-  );
+  const validationError = imageUploadError(file);
+  assert(!validationError, 400, validationError || "File gambar tidak valid.");
   try {
     const pipeline = sharp(Buffer.from(await file.arrayBuffer()), {
       limitInputPixels: 40_000_000,

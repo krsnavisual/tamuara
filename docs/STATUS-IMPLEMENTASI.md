@@ -1,8 +1,22 @@
 # Status implementasi Tamuara
 
-**26 September 2026 — tahap checkout Midtrans Sandbox**
+**3 Oktober 2026 — persiapan domain dan hosting**
 
-Proyek Supabase Tamuara terhubung ke GitHub dengan deploy production otomatis nonaktif. Aplikasi port 3001 memakai proyek uji sementara; mode demo lokal tetap tersedia melalui konfigurasi. Domain, SMTP, dan akun merchant belum tersedia. [Panduan email](PANDUAN-EMAIL.md) serta [panduan Midtrans Sandbox](PANDUAN-MIDTRANS-SANDBOX.md) sudah disiapkan. Pembayaran default `disabled`; service checkout hanya mendukung sandbox dengan konfigurasi lengkap dan katalog SQL aktif.
+Proyek Supabase Tamuara terhubung ke GitHub dengan deploy production otomatis nonaktif. Aplikasi port 3001 memakai proyek uji sementara; mode demo lokal tetap tersedia melalui konfigurasi. Domain `tamuara.com` sudah dibeli dan DNS dipindahkan ke Cloudflare. Aplikasi belum dihosting; SMTP dan akun merchant belum tersedia. [Panduan deployment](PANDUAN-DEPLOYMENT.md), [panduan email](PANDUAN-EMAIL.md), serta [panduan Midtrans Sandbox](PANDUAN-MIDTRANS-SANDBOX.md) mencatat langkah lanjut. Pembayaran default `disabled`; service checkout hanya mendukung sandbox dengan konfigurasi lengkap dan katalog SQL aktif.
+
+## Domain dan persiapan hosting
+
+| Area | Status pada 3 Oktober 2026 |
+| --- | --- |
+| Registrasi domain | `tamuara.com` terdaftar di Squarespace |
+| Nameserver | `dell.ns.cloudflare.com` dan `lewis.ns.cloudflare.com` tersimpan di Squarespace; Google DNS sudah membaca keduanya |
+| DNSSEC | Cloudflare menandatangani DNS dan DS baru tersimpan di Squarespace; Google DNS mengonfirmasi DS cocok dan `AD=true`. Resolver Cloudflare juga mengonfirmasi respons A valid (`Status=0`, `AD=true`). Dashboard masih menunggu verifikasi background saat pemeriksaan terakhir |
+| Record website | A domain utama dan CNAME `www` masih mengarah ke parking Squarespace, dengan proxy Cloudflare nonaktif (DNS only) |
+| Hosting aplikasi | Belum ada deployment Tamuara. Akun Vercel masih Hobby; layanan komersial memerlukan keputusan paket Pro dan biaya, serta persetujuan tambahan akses GitHub ke repository Tamuara |
+| Konfigurasi lokal | `vercel.json` menonaktifkan deployment Git otomatis; `.vercelignore` mengecualikan environment, data lokal, dan artefak privat dari unggahan CLI |
+| Foto | Batas 4 MiB per JPG/PNG/WebP pada editor dan server, dengan ruang 64 KiB untuk multipart. Pilihan berkas tidak valid ditolak sebelum unggahan dimulai |
+
+Perubahan nameserver dan validasi DNSSEC belum membuat aplikasi tersedia di `tamuara.com`. Record hosting akan diganti setelah deployment HTTPS dapat diuji.
 
 ## Sudah berjalan lokal
 
@@ -47,7 +61,7 @@ Adapter belum dianggap siap untuk pelanggan berbayar. Proyek online dipakai seme
 
 ## Masih diperlukan untuk pilot berbayar
 
-1. Proyek Supabase staging terpisah saat kapasitas tersedia; siapkan domain dan SMTP mengikuti [panduan email](PANDUAN-EMAIL.md), atur template email, lalu uji email konfirmasi dan pemulihan nyata.
+1. Selesaikan hosting HTTPS dan arahkan domain mengikuti [panduan deployment](PANDUAN-DEPLOYMENT.md). Siapkan SMTP mengikuti [panduan email](PANDUAN-EMAIL.md), sinkronkan origin/callback, atur template email, lalu uji email konfirmasi dan pemulihan nyata. Pisahkan proyek Supabase staging saat kapasitas tersedia.
 2. Akun merchant sandbox, webhook HTTPS publik, katalog/harga uji, dan pengujian provider sesuai [panduan sandbox](PANDUAN-MIDTRANS-SANDBOX.md). Tambahkan rekonsiliasi terjadwal serta SOP review/refund/recovery. Aktivasi live memerlukan tahap terpisah; tes tiruan belum membuktikan merchant siap.
 3. Riwayat beberapa snapshot dan rollback konten. Implementasi lokal saat ini menyimpan draf dan snapshot terbit terbaru.
 4. Masa berlaku otomatis tautan preview. Saat ini preview dapat dicabut dengan regenerasi tetapi belum mempunyai TTL.
@@ -56,10 +70,11 @@ Adapter belum dianggap siap untuk pelanggan berbayar. Proyek online dipakai seme
 7. QR hadiah unggahan, pengurutan galeri/bagian, dan penyempurnaan editor. Saat ini amplop digital menggunakan detail rekening dan tombol salin.
 8. Retensi, ekspor/penghapusan akun, job arsip, pengingat kedaluwarsa, analitik funnel dan monitoring produksi.
 9. Backup terjadwal dan uji pemulihan database/media/kunci, staging terpisah, aksesibilitas menyeluruh, Safari/iOS fisik, serta uji beban.
-10. Harga dan ketentuan final, materi berizin, domain/merek, SOP layanan, serta pilot 5–10 pasangan.
+10. Harga dan ketentuan final, materi berizin, kesiapan merek, SOP layanan, serta pilot 5–10 pasangan.
 
 ## Verifikasi tahap ini
 
+- Persiapan hosting: typecheck, lint, dan build production terpisah lulus. Dua belas tes backend/media terarah dan satu tes browser tambahan lulus untuk batas foto dan penolakan pilihan berkas sebelum request. Tes berikut berasal dari tahap sebelumnya dan tidak seluruhnya dijalankan ulang pada migrasi DNS.
 - **70 pemeriksaan TypeScript** (52 tes utama + 18 subtes), typecheck, lint, dan build lulus, mencakup domain/HTTP, adapter, serta service pembayaran.
 - **175 pemeriksaan SQL** (90 sebelumnya + 85 pembayaran) lulus pada tujuh migrasi lokal: isolasi/RLS/CAS/publikasi/bantuan serta reservasi, harga/kredit, deduplikasi, status terminal, dan revokasi ketergantungan paket.
 - `npm.cmd run test:payments:local` lulus: SQL nyata dengan provider sintetis, checkout concurrent sekali, harga server, redirect privat, aktivasi idempoten tanpa publikasi, validasi signature/nominal, refund/review/reversal, pembersihan fixture dan pemulihan katalog.

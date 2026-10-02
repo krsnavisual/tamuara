@@ -32,7 +32,7 @@ Contoh URL, memakai domain ilustrasi:
 - Tautan tamu: `tamuara.example/u/ayu-dan-bima?guest=TOKEN_ACAK`.
 - Tautan tamu lain tetap bagian dari website dan pembelian yang sama.
 
-Harga tidak dihitung per tautan yang dibagikan. Kuota tamu, foto, masa aktif, dan bantuan admin dapat dibedakan per paket dan harus terlihat sebelum checkout. Nama domain produksi belum ditetapkan.
+Harga tidak dihitung per tautan yang dibagikan. Kuota tamu, foto, masa aktif, dan bantuan admin dapat dibedakan per paket dan harus terlihat sebelum checkout. **Pembaruan 3 Oktober 2026:** domain `tamuara.com` sudah dibeli dan DNS dipindahkan ke Cloudflare; contoh URL di atas berasal dari rancangan awal. Hosting aplikasi belum aktif. Status terbaru tercatat pada [status implementasi](STATUS-IMPLEMENTASI.md).
 
 ### Paket untuk diuji
 

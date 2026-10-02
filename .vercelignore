@@ -1,0 +1,14 @@
+.data/
+.env*
+.next*/
+.vercel/
+backups/
+brand/
+docs/
+supabase/.temp/
+supabase/.branches/
+test-results/
+playwright-report/
+*.log
+*.tsbuildinfo
+marketing-*.png

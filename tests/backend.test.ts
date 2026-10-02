@@ -4,6 +4,10 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
+import {
+  IMAGE_UPLOAD_SIZE_ERROR,
+  MAX_IMAGE_UPLOAD_BYTES,
+} from "../src/lib/media-upload";
 import { authenticate, logout } from "../src/lib/server/auth";
 import { getWorkspace, mutateWorkspace } from "../src/lib/server/workspace";
 import {
@@ -392,6 +396,33 @@ test("admin assignment, review permissions, revision limits, and owner-only publ
   ).invitations[0];
   invitation = await publish(owner.token, invitation);
   assert.equal(invitation.status, "published");
+});
+
+test("local media rejects oversized files before writing any asset", async () => {
+  const owner = await customer("media-size");
+  const invitation = await create(owner.token);
+  await assert.rejects(
+    uploadMedia(
+      owner.token,
+      invitation.id,
+      new File([new Uint8Array(MAX_IMAGE_UPLOAD_BYTES + 1)], "large.png", {
+        type: "image/png",
+      }),
+    ),
+    (error: unknown) =>
+      error instanceof AppError &&
+      error.status === 400 &&
+      error.message === IMAGE_UPLOAD_SIZE_ERROR,
+  );
+  const store = JSON.parse(
+    await fs.readFile(path.join(directory, "tamuara.json"), "utf8"),
+  );
+  assert.equal(
+    store.media.filter(
+      (asset: { invitationId: string }) => asset.invitationId === invitation.id,
+    ).length,
+    0,
+  );
 });
 
 test("media stays private until publication and cross-invitation references are rejected", async () => {

@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
+import { imageUploadError } from "../media-upload";
 import { requireUser } from "./auth";
 import { hashToken } from "./crypto";
 import { AppError, assert } from "./errors";
@@ -14,16 +15,8 @@ export async function uploadMedia(
   invitationId: string,
   file: File,
 ) {
-  assert(
-    file.size > 0 && file.size <= 8 * 1024 * 1024,
-    400,
-    "Ukuran gambar maksimal 8 MB.",
-  );
-  assert(
-    ["image/jpeg", "image/png", "image/webp"].includes(file.type),
-    400,
-    "Gunakan gambar JPG, PNG, atau WebP.",
-  );
+  const validationError = imageUploadError(file);
+  assert(!validationError, 400, validationError || "File gambar tidak valid.");
   await withStore(({ store }) => {
     requireInvitation(store, invitationId, requireUser(store, session));
   }, false);

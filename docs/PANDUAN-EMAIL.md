@@ -1,12 +1,12 @@
 # Konfigurasi email akun Tamuara
 
-Panduan ini menyiapkan email konfirmasi pendaftaran dan pemulihan kata sandi. Domain dan layanan SMTP belum tersedia; langkah berikut dijalankan setelah keduanya dipilih. Email sungguhan belum diuji. Konfigurasi Auth saat ini memakai alamat pengembangan `http://127.0.0.1:3001`.
+Panduan ini menyiapkan email konfirmasi pendaftaran dan pemulihan kata sandi. Domain `tamuara.com` sudah dibeli di Squarespace dan DNS dikelola melalui Cloudflare. Layanan SMTP dan identitas pengirim belum dipilih; email sungguhan belum diuji. Konfigurasi Auth saat ini memakai alamat pengembangan `http://127.0.0.1:3001`. Hosting aplikasi belum aktif; lihat [panduan deployment](PANDUAN-DEPLOYMENT.md).
 
 ## 1. Siapkan domain dan identitas pengirim
 
-1. Daftarkan domain yang akan dimiliki Tamuara dan pastikan Anda dapat mengubah DNS-nya. Nama domain dalam panduan ini hanyalah contoh, bukan domain yang telah dibeli.
+1. Gunakan domain milik Tamuara, `tamuara.com`, dan tambahkan record pengirim pada DNS Cloudflare. Kepemilikan domain dan perpindahan nameserver sudah selesai; verifikasi pengirim mengikuti provider SMTP yang dipilih.
 2. Pilih layanan email transaksional yang menyediakan SMTP dan verifikasi domain. Periksa kuota, log pengiriman, pembatasan penerima saat akun masih sandbox, serta prosedur aktivasi layanan pada dokumentasi provider pilihan.
-3. Tentukan nama pengirim **Tamuara** dan alamat seperti `akun@auth.example.com`. Subdomain pengiriman dapat membantu memisahkan reputasi email akun dari pemasaran; alamat harus sesuai identitas yang diverifikasi provider. Contoh alur verifikasi tersedia pada [dokumentasi domain Resend](https://resend.com/docs/dashboard/domains/introduction), tanpa mewajibkan provider tersebut.
+3. Tentukan nama pengirim **Tamuara** dan alamat seperti `akun@auth.tamuara.com`. Alamat ini masih usulan, belum aktif. Subdomain pengiriman dapat membantu memisahkan reputasi email akun dari pemasaran; alamat harus sesuai identitas yang diverifikasi provider. Contoh alur verifikasi tersedia pada [dokumentasi domain Resend](https://resend.com/docs/dashboard/domains/introduction), tanpa mewajibkan provider tersebut.
 
 ## 2. Verifikasi DNS
 
@@ -50,7 +50,7 @@ Untuk pengembangan saat ini:
 
 Jalankan aplikasi pada port 3001. Buka tautan email di komputer yang menjalankan aplikasi; `127.0.0.1` pada ponsel mengarah ke ponsel itu sendiri.
 
-Saat domain website dan hosting HTTPS siap, ubah `TAMUARA_APP_URL` pada environment hosting dan Site URL ke origin production. Tambahkan kedua callback dengan origin HTTPS yang sama, misalnya `https://example.com/api/auth/callback` dan `https://example.com/api/auth/callback?flow=recovery`. Pilih satu hostname kanonis. Restart/redeploy aplikasi setelah perubahan environment; uji dengan email baru. Gunakan path callback tepat untuk production. [Supabase: redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls).
+Saat hosting HTTPS dan pengalihan domain siap, gunakan `https://tamuara.com` sebagai origin kanonis pada `TAMUARA_APP_URL` di hosting dan Site URL Supabase. Tambahkan `https://tamuara.com/api/auth/callback` serta `https://tamuara.com/api/auth/callback?flow=recovery` ke Redirect URLs. Arahkan `www.tamuara.com` ke hostname kanonis sebelum menguji login atau API. Restart/redeploy aplikasi setelah perubahan environment; uji dengan email baru. Callback lokal boleh dipertahankan selama pengembangan masih diperlukan. Gunakan path callback tepat untuk production. [Supabase: redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls).
 
 ## 5. Sesuaikan isi email tanpa merusak tautannya
 
@@ -83,7 +83,8 @@ Rate limit berlaku di Supabase maupun provider; 429 berarti batas permintaan ter
 
 ## Checklist sebelum pendaftaran pelanggan dibuka
 
-- [ ] Domain dimiliki Tamuara dan DNS pengirim terverifikasi.
+- [x] Domain `tamuara.com` dimiliki Tamuara dan DNS dapat dikelola di Cloudflare.
+- [ ] Identitas dan DNS pengirim terverifikasi oleh provider SMTP.
 - [ ] Custom SMTP aktif dengan pengirim Tamuara dan kredensial tersimpan privat.
 - [ ] Konfirmasi email tetap aktif; template dan tracking telah diperiksa.
 - [ ] Origin HTTPS aplikasi, Site URL, dan dua callback production cocok.

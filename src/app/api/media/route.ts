@@ -1,4 +1,8 @@
 import type { NextRequest } from "next/server";
+import {
+  IMAGE_UPLOAD_SIZE_ERROR,
+  MAX_MEDIA_REQUEST_BYTES,
+} from "@/lib/media-upload";
 import { isSupabaseMode } from "@/lib/server/backend-config";
 import { createSupabaseServerClient } from "@/lib/server/supabase-auth";
 import { uploadSupabaseMedia } from "@/lib/server/supabase-media";
@@ -33,11 +37,11 @@ export async function POST(request: NextRequest) {
       415,
       "Format unggahan tidak valid.",
     );
-    const limit = 9 * 1024 * 1024;
     assert(
-      Number(request.headers.get("content-length") || 0) <= limit,
+      Number(request.headers.get("content-length") || 0) <=
+        MAX_MEDIA_REQUEST_BYTES,
       413,
-      "Ukuran unggahan terlalu besar.",
+      IMAGE_UPLOAD_SIZE_ERROR,
     );
     const reader = request.body?.getReader();
     assert(reader, 400, "File belum dipilih.");
@@ -47,9 +51,9 @@ export async function POST(request: NextRequest) {
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > limit) {
+      if (total > MAX_MEDIA_REQUEST_BYTES) {
         await reader.cancel();
-        throw new AppError(413, "Ukuran unggahan terlalu besar.");
+        throw new AppError(413, IMAGE_UPLOAD_SIZE_ERROR);
       }
       chunks.push(value);
     }

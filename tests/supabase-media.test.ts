@@ -3,6 +3,10 @@ import { test } from "node:test";
 import type { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import sharp from "sharp";
+import {
+  IMAGE_UPLOAD_SIZE_ERROR,
+  MAX_IMAGE_UPLOAD_BYTES,
+} from "../src/lib/media-upload";
 import { hashToken } from "../src/lib/server/crypto";
 import { AppError } from "../src/lib/server/errors";
 import { createSupabaseMediaAdapter } from "../src/lib/server/supabase-media";
@@ -193,6 +197,38 @@ test("media upload checks tenant access and converts the image to WebP", async (
   const optimized = data.objects.get(row.object_path as string);
   assert.ok(optimized);
   assert.equal((await sharp(optimized).metadata()).format, "webp");
+});
+
+test("media accepts exactly 4 MiB and rejects the next byte without writing Storage", async () => {
+  const data = fixture();
+  const original = await image();
+  const bytes = new Uint8Array(MAX_IMAGE_UPLOAD_BYTES);
+  bytes.set(new Uint8Array(await original.arrayBuffer()));
+  await data
+    .adapter(owner)
+    .upload(
+      request,
+      invitationId,
+      new File([bytes], "boundary.jpg", { type: "image/jpeg" }),
+    );
+  assert.equal(data.objects.size, 1);
+  assert.equal(data.rows.media_assets.length, 1);
+
+  await assert.rejects(
+    data.adapter(owner).upload(
+      request,
+      invitationId,
+      new File([new Uint8Array(MAX_IMAGE_UPLOAD_BYTES + 1)], "large.jpg", {
+        type: "image/jpeg",
+      }),
+    ),
+    (error: unknown) =>
+      error instanceof AppError &&
+      error.status === 400 &&
+      error.message === IMAGE_UPLOAD_SIZE_ERROR,
+  );
+  assert.equal(data.objects.size, 1);
+  assert.equal(data.rows.media_assets.length, 1);
 });
 
 test("draft images require a current preview token or assigned user", async () => {
