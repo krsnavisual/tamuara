@@ -1,16 +1,16 @@
 # Status implementasi Tamuara
 
-**3 Oktober 2026 — persiapan domain dan hosting**
+**5 Oktober 2026 — persiapan domain dan hosting**
 
 Proyek Supabase Tamuara terhubung ke GitHub dengan deploy production otomatis nonaktif. Aplikasi port 3001 memakai proyek uji sementara; mode demo lokal tetap tersedia melalui konfigurasi. Domain `tamuara.com` sudah dibeli dan DNS dipindahkan ke Cloudflare. Aplikasi belum dihosting; SMTP dan akun merchant belum tersedia. [Panduan deployment](PANDUAN-DEPLOYMENT.md), [panduan email](PANDUAN-EMAIL.md), serta [panduan Midtrans Sandbox](PANDUAN-MIDTRANS-SANDBOX.md) mencatat langkah lanjut. Pembayaran default `disabled`; service checkout hanya mendukung sandbox dengan konfigurasi lengkap dan katalog SQL aktif.
 
 ## Domain dan persiapan hosting
 
-| Area | Status pada 3 Oktober 2026 |
+| Area | Status pada 5 Oktober 2026 |
 | --- | --- |
 | Registrasi domain | `tamuara.com` terdaftar di Squarespace |
 | Nameserver | `dell.ns.cloudflare.com` dan `lewis.ns.cloudflare.com` tersimpan di Squarespace; Google DNS sudah membaca keduanya |
-| DNSSEC | Cloudflare menandatangani DNS dan DS baru tersimpan di Squarespace; Google DNS mengonfirmasi DS cocok dan `AD=true`. Resolver Cloudflare juga mengonfirmasi respons A valid (`Status=0`, `AD=true`). Dashboard masih menunggu verifikasi background saat pemeriksaan terakhir |
+| DNSSEC | Cloudflare menandatangani DNS dan DS baru tersimpan di Squarespace; Google dan Cloudflare mengonfirmasi `AD=true`. Dashboard Cloudflare sudah menampilkan DNSSEC aktif pada 5 Oktober 2026 |
 | Record website | A domain utama dan CNAME `www` masih mengarah ke parking Squarespace, dengan proxy Cloudflare nonaktif (DNS only) |
 | Hosting aplikasi | Belum ada deployment Tamuara. Akun Vercel masih Hobby; layanan komersial memerlukan keputusan paket Pro dan biaya, serta persetujuan tambahan akses GitHub ke repository Tamuara |
 | Konfigurasi lokal | `vercel.json` menonaktifkan deployment Git otomatis; `.vercelignore` mengecualikan environment, data lokal, dan artefak privat dari unggahan CLI |

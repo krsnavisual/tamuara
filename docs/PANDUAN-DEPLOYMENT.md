@@ -1,6 +1,6 @@
 # Deployment dan domain Tamuara
 
-**Pemeriksaan terakhir: 3 Oktober 2026.** Aplikasi masih berjalan lokal dan belum tersedia melalui domain. Panduan ini mencatat konfigurasi yang sudah diterapkan serta urutan aktivasi hosting.
+**Pemeriksaan terakhir: 5 Oktober 2026.** Aplikasi belum tersedia melalui domain. Panduan ini mencatat konfigurasi yang sudah diterapkan serta urutan aktivasi hosting.
 
 ## 1. Status domain
 
@@ -9,7 +9,7 @@
 | Registrar | Squarespace, domain `tamuara.com` |
 | DNS | Cloudflare Free, nameserver `dell.ns.cloudflare.com` dan `lewis.ns.cloudflare.com` |
 | DNSSEC | Penandatanganan Cloudflare aktif; DS baru disimpan di Squarespace. Google DNS membaca nameserver baru dan memvalidasi rantai DNSSEC (`AD=true`, DS cocok). Resolver Cloudflare juga mengonfirmasi respons A valid (`Status=0`, `AD=true`) |
-| Dashboard Cloudflare | Masih menunggu verifikasi background saat pemeriksaan terakhir; hasil resolver tidak membuktikan seluruh cache internet sudah diperbarui |
+| Dashboard Cloudflare | DNSSEC aktif: “Success! tamuara.com is protected with DNSSEC.” pada pemeriksaan 5 Oktober 2026 |
 | Domain utama / `www` | A/CNAME masih parking Squarespace, DNS only |
 | Hosting | Belum ada deployment Tamuara |
 
